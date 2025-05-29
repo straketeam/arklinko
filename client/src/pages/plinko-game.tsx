@@ -1,6 +1,4 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { useMutation, useQuery } from "@tanstack/react-query"
-import { useToast } from '@/hooks/use-toast'
 
 interface ArkWallet {
   address: string
@@ -25,18 +23,18 @@ interface Peg {
 }
 
 // Game constants
-const MIN_BET = 0.0001 // Minimum bet in ARK
-const MAX_BET = 5 // Maximum bet in ARK
+const MIN_BET = 0.0001
+const MAX_BET = 5
 const HOUSE_ADDRESS = 'AdEKeaC8sBm24RHwnPvZfEWUiCPB4Z2xZp'
 
-// Plinko game physics constants
+// Physics constants
 const BALL_RADIUS = 10
 const PEG_RADIUS = 5
 const GRAVITY = 0.3
 const BOUNCE_DAMPING = 0.7
 const HORIZONTAL_DAMPING = 0.98
 
-// Plinko multipliers (from left to right)
+// Plinko multipliers
 const MULTIPLIERS = [10, 5, 4, 3, 2, -0.5, 1.5, 1.25, 0, -1, 0, 1.25, 1.5, -0.5, 2, 3, 4, 5, 10]
 
 function PlinkoCanvas({ 
@@ -60,17 +58,14 @@ function PlinkoCanvas({
     if (!canvas) return
 
     const pegs: Peg[] = []
-    
     const canvasWidth = 1400
     const canvasHeight = 900
-    
     const playAreaTop = 100
     const playAreaBottom = canvasHeight - 100
     const playAreaLeft = 70
     const playAreaRight = canvasWidth - 70
     const playAreaWidth = playAreaRight - playAreaLeft
     const playAreaHeight = playAreaBottom - playAreaTop
-    
     const numRows = 20
     
     for (let row = 0; row < numRows; row++) {
@@ -168,7 +163,7 @@ function PlinkoCanvas({
       ctx.fill()
     })
 
-    // Draw multiplier boxes at bottom
+    // Draw multiplier boxes
     const boxWidth = canvas.width / MULTIPLIERS.length
     const boxHeight = 80
     const boxY = canvas.height - boxHeight
@@ -176,25 +171,22 @@ function PlinkoCanvas({
     MULTIPLIERS.forEach((multiplier, index) => {
       const x = index * boxWidth
       
-      // Color coding based on multiplier value
       if (multiplier >= 5) {
-        ctx.fillStyle = '#22c55e' // Green for high multipliers
+        ctx.fillStyle = '#22c55e'
       } else if (multiplier >= 1.25) {
-        ctx.fillStyle = '#3b82f6' // Blue for medium multipliers  
+        ctx.fillStyle = '#3b82f6'
       } else if (multiplier === 0) {
-        ctx.fillStyle = '#f59e0b' // Yellow for break-even
+        ctx.fillStyle = '#f59e0b'
       } else {
-        ctx.fillStyle = '#ef4444' // Red for losing slots
+        ctx.fillStyle = '#ef4444'
       }
       
       ctx.fillRect(x, boxY, boxWidth, boxHeight)
       
-      // Box border
       ctx.strokeStyle = '#374151'
       ctx.lineWidth = 2
       ctx.strokeRect(x, boxY, boxWidth, boxHeight)
       
-      // Multiplier text
       ctx.fillStyle = '#ffffff'
       ctx.font = 'bold 20px Arial'
       ctx.textAlign = 'center'
@@ -218,20 +210,17 @@ function PlinkoCanvas({
     ballsRef.current = ballsRef.current.filter(ball => {
       if (!ball.active) return false
 
-      // Apply physics
       ball.vy += GRAVITY
       ball.vx *= HORIZONTAL_DAMPING
       ball.x += ball.vx
       ball.y += ball.vy
 
-      // Check collision with pegs
       pegsRef.current.forEach(peg => {
         if (checkCollision(ball, peg)) {
           resolveBallPegCollision(ball, peg)
         }
       })
 
-      // Check if ball reached bottom
       if (ball.y > boxY - ball.radius) {
         const slotIndex = Math.floor(ball.x / boxWidth)
         const validSlotIndex = Math.max(0, Math.min(MULTIPLIERS.length - 1, slotIndex))
@@ -240,13 +229,11 @@ function PlinkoCanvas({
         return false
       }
 
-      // Wall bouncing
       if (ball.x <= ball.radius || ball.x >= canvas.width - ball.radius) {
         ball.vx *= -BOUNCE_DAMPING
         ball.x = Math.max(ball.radius, Math.min(canvas.width - ball.radius, ball.x))
       }
 
-      // Draw ball
       ctx.fillStyle = '#fbbf24'
       ctx.beginPath()
       ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2)
@@ -276,10 +263,37 @@ function PlinkoCanvas({
       ref={canvasRef}
       width={1400}
       height={900}
-      className="border-2 border-gray-600 rounded-lg bg-gray-900"
-      style={{ maxWidth: '100%', height: 'auto' }}
+      style={{ 
+        border: '2px solid #4b5563', 
+        borderRadius: '8px', 
+        backgroundColor: '#111827',
+        maxWidth: '100%', 
+        height: 'auto' 
+      }}
     />
   )
+}
+
+// Simple notification function
+function showNotification(message: string, type: 'success' | 'error' = 'success') {
+  const notification = document.createElement('div')
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 16px;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    z-index: 1000;
+    background-color: ${type === 'success' ? '#22c55e' : '#ef4444'};
+  `
+  notification.textContent = message
+  document.body.appendChild(notification)
+  
+  setTimeout(() => {
+    document.body.removeChild(notification)
+  }, 3000)
 }
 
 // ARK Connect integration
@@ -289,12 +303,6 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
   connectedWallet?: ArkWallet | null
 }) {
   const [isConnecting, setIsConnecting] = useState(false)
-  const { toast } = useToast()
-
-  // Check for existing connection on mount
-  useEffect(() => {
-    checkExistingConnection()
-  }, [])
 
   const checkExistingConnection = async () => {
     if (typeof window !== 'undefined' && window.arkconnect) {
@@ -314,13 +322,13 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
     }
   }
 
+  useEffect(() => {
+    checkExistingConnection()
+  }, [])
+
   const connectWallet = async () => {
     if (!window.arkconnect) {
-      toast({
-        title: "ARK Connect Required",
-        description: "Please install the ARK Connect browser extension to play ARKlinko.",
-        variant: "destructive"
-      })
+      showNotification('Please install the ARK Connect browser extension to play ARKlinko.', 'error')
       return
     }
 
@@ -336,16 +344,9 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
       }
       
       onWalletConnected(wallet)
-      toast({
-        title: "Wallet Connected",
-        description: `Connected to ${account.address.substring(0, 10)}...`,
-      })
+      showNotification(`Connected to ${account.address.substring(0, 10)}...`)
     } catch (error) {
-      toast({
-        title: "Connection Failed",
-        description: "Failed to connect ARK wallet. Please try again.",
-        variant: "destructive"
-      })
+      showNotification('Failed to connect ARK wallet. Please try again.', 'error')
     } finally {
       setIsConnecting(false)
     }
@@ -356,24 +357,32 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
       await window.arkconnect.disconnect()
     }
     onDisconnect()
-    toast({
-      title: "Wallet Disconnected",
-      description: "ARK wallet has been disconnected.",
-    })
+    showNotification('ARK wallet has been disconnected.')
   }
 
   if (connectedWallet) {
     return (
-      <div className="bg-gray-800 p-4 rounded-lg">
-        <div className="flex justify-between items-center">
+      <div style={{ backgroundColor: '#1f2937', padding: '16px', borderRadius: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <p className="text-sm text-gray-400">Connected Wallet</p>
-            <p className="font-mono text-sm">{connectedWallet.address.substring(0, 20)}...</p>
-            <p className="text-lg font-bold text-green-400">{connectedWallet.balance} ARK</p>
+            <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 4px 0' }}>Connected Wallet</p>
+            <p style={{ fontFamily: 'monospace', fontSize: '14px', margin: '0 0 4px 0', color: 'white' }}>
+              {connectedWallet.address.substring(0, 20)}...
+            </p>
+            <p style={{ fontSize: '18px', fontWeight: 'bold', color: '#22c55e', margin: '0' }}>
+              {connectedWallet.balance} ARK
+            </p>
           </div>
           <button
             onClick={disconnect}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            style={{ 
+              padding: '8px 16px', 
+              backgroundColor: '#dc2626', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
           >
             Disconnect
           </button>
@@ -383,13 +392,25 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
   }
 
   return (
-    <div className="bg-gray-800 p-6 rounded-lg text-center">
-      <h3 className="text-xl font-bold mb-4">Connect ARK Wallet</h3>
-      <p className="text-gray-400 mb-4">Connect your ARK wallet to play ARKlinko with real cryptocurrency</p>
+    <div style={{ backgroundColor: '#1f2937', padding: '24px', borderRadius: '8px', textAlign: 'center' }}>
+      <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', color: 'white' }}>
+        Connect ARK Wallet
+      </h3>
+      <p style={{ color: '#9ca3af', marginBottom: '16px' }}>
+        Connect your ARK wallet to play ARKlinko with real cryptocurrency
+      </p>
       <button
         onClick={connectWallet}
         disabled={isConnecting}
-        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        style={{ 
+          padding: '12px 24px', 
+          backgroundColor: '#2563eb', 
+          color: 'white', 
+          border: 'none', 
+          borderRadius: '8px',
+          cursor: isConnecting ? 'not-allowed' : 'pointer',
+          opacity: isConnecting ? 0.5 : 1
+        }}
       >
         {isConnecting ? 'Connecting...' : 'Connect ARK Wallet'}
       </button>
@@ -404,74 +425,30 @@ export default function ARKlinko() {
   const [gameState, setGameState] = useState<'idle' | 'playing'>('idle')
   const [triggerDrop, setTriggerDrop] = useState(false)
   const [gameHistory, setGameHistory] = useState<any[]>([])
-  const { toast } = useToast()
+  const [realTimeBalance, setRealTimeBalance] = useState<string>('')
 
   // Fetch real-time balance
-  const { data: realTimeBalance, refetch: refetchBalance } = useQuery({
-    queryKey: ['arkBalance', wallet?.address],
-    queryFn: async () => {
-      if (!wallet?.address) return null
-      
-      const response = await fetch(`https://api.ark.io/api/v2/wallets/${wallet.address}`)
-      const data = await response.json()
-      
-      if (data.data && data.data.balance) {
-        return (parseInt(data.data.balance) / 100000000).toString()
-      }
-      return '0'
-    },
-    enabled: !!wallet?.address,
-    refetchInterval: 10000 // Refresh every 10 seconds
-  })
+  useEffect(() => {
+    if (!wallet?.address) return
 
-  // Game play mutation
-  const playGameMutation = useMutation({
-    mutationFn: async ({ betAmount, multiplier }: { betAmount: number, multiplier: number }) => {
-      const response = await fetch('/api/game/play', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          betAmount,
-          multiplier,
-          playerAddress: wallet?.address
-        })
-      })
-      
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Game failed')
+    const fetchBalance = async () => {
+      try {
+        const response = await fetch(`https://api.ark.io/api/v2/wallets/${wallet.address}`)
+        const data = await response.json()
+        
+        if (data.data && data.data.balance) {
+          setRealTimeBalance((parseInt(data.data.balance) / 100000000).toString())
+        }
+      } catch (error) {
+        console.error('Error fetching balance:', error)
       }
-      
-      return response.json()
-    },
-    onSuccess: (data) => {
-      setGameHistory(prev => [data, ...prev.slice(0, 9)])
-      refetchBalance()
-      
-      if (data.isWin) {
-        toast({
-          title: "You Won!",
-          description: `Won ${data.payout} ARK (${data.multiplier}x)`,
-        })
-      } else {
-        toast({
-          title: "Better Luck Next Time",
-          description: `Lost ${data.betAmount} ARK`,
-          variant: "destructive"
-        })
-      }
-      
-      setGameState('idle')
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Game Error",
-        description: error.message,
-        variant: "destructive"
-      })
-      setGameState('idle')
     }
-  })
+
+    fetchBalance()
+    const interval = setInterval(fetchBalance, 10000)
+    
+    return () => clearInterval(interval)
+  }, [wallet?.address])
 
   const handleWalletConnected = (connectedWallet: ArkWallet) => {
     setWallet(connectedWallet)
@@ -483,9 +460,38 @@ export default function ARKlinko() {
     setGameHistory([])
   }
 
-  const handleBallLanded = (multiplier: number) => {
+  const handleBallLanded = async (multiplier: number) => {
     const bet = parseFloat(betAmount)
-    playGameMutation.mutate({ betAmount: bet, multiplier })
+
+    try {
+      const response = await fetch('/api/game/play', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          betAmount: bet,
+          multiplier,
+          playerAddress: wallet?.address
+        })
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Game failed')
+      }
+      
+      const data = await response.json()
+      setGameHistory(prev => [data, ...prev.slice(0, 9)])
+      
+      if (data.isWin) {
+        showNotification(`You Won! ${data.payout} ARK (${data.multiplier}x)`)
+      } else {
+        showNotification(`Lost ${data.betAmount} ARK`, 'error')
+      }
+    } catch (error: any) {
+      showNotification(`Game Error: ${error.message}`, 'error')
+    }
+    
+    setGameState('idle')
   }
 
   const handleTriggerComplete = () => {
@@ -497,20 +503,12 @@ export default function ARKlinko() {
     const currentBalance = parseFloat(realTimeBalance || wallet?.balance || '0')
     
     if (!bet || bet < MIN_BET || bet > MAX_BET) {
-      toast({
-        title: "Invalid Bet",
-        description: `Bet must be between ${MIN_BET} and ${MAX_BET} ARK`,
-        variant: "destructive"
-      })
+      showNotification(`Bet must be between ${MIN_BET} and ${MAX_BET} ARK`, 'error')
       return
     }
     
     if (bet > currentBalance) {
-      toast({
-        title: "Insufficient Balance",
-        description: "Not enough ARK in your wallet",
-        variant: "destructive"
-      })
+      showNotification('Not enough ARK in your wallet', 'error')
       return
     }
     
@@ -519,24 +517,30 @@ export default function ARKlinko() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div style={{ minHeight: '100vh', backgroundColor: '#111827', color: 'white' }}>
       {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {/* ARK Logo */}
-              <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">A</span>
+      <div style={{ backgroundColor: '#1f2937', borderBottom: '1px solid #374151' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ 
+                width: '48px', 
+                height: '48px', 
+                backgroundColor: '#dc2626', 
+                borderRadius: '8px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }}>
+                <span style={{ color: 'white', fontWeight: 'bold', fontSize: '20px' }}>A</span>
               </div>
               <div>
-                <h1 className="text-3xl font-bold">ARKlinko</h1>
-                <p className="text-gray-400">Provably Fair ARK Cryptocurrency Game</p>
+                <h1 style={{ fontSize: '30px', fontWeight: 'bold', margin: '0' }}>ARKlinko</h1>
+                <p style={{ color: '#9ca3af', margin: '0' }}>Provably Fair ARK Cryptocurrency Game</p>
               </div>
             </div>
             
-            {/* Wallet Connection */}
-            <div className="w-80">
+            <div style={{ width: '320px' }}>
               <ArkConnect 
                 onWalletConnected={handleWalletConnected}
                 onDisconnect={handleDisconnect}
@@ -548,12 +552,12 @@ export default function ARKlinko() {
       </div>
 
       {/* Main Game Area */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 16px' }}>
         {wallet ? (
-          <div className="space-y-8">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
             {/* Game Canvas */}
-            <div className="bg-gray-800 p-6 rounded-lg">
-              <div className="flex justify-center">
+            <div style={{ backgroundColor: '#1f2937', padding: '24px', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <PlinkoCanvas
                   onBallLanded={handleBallLanded}
                   triggerDrop={triggerDrop}
@@ -563,10 +567,10 @@ export default function ARKlinko() {
             </div>
 
             {/* Betting Controls */}
-            <div className="bg-gray-800 p-6 rounded-lg">
-              <div className="flex items-center justify-center space-x-6">
+            <div style={{ backgroundColor: '#1f2937', padding: '24px', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px' }}>
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                  <label style={{ display: 'block', fontSize: '14px', color: '#9ca3af', marginBottom: '8px' }}>
                     Bet Amount (ARK)
                   </label>
                   <input
@@ -577,22 +581,38 @@ export default function ARKlinko() {
                     max={MAX_BET}
                     step={MIN_BET}
                     placeholder={`Min: ${MIN_BET}`}
-                    className="w-32 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
                     disabled={gameState === 'playing'}
+                    style={{ 
+                      width: '128px', 
+                      padding: '8px 12px', 
+                      backgroundColor: '#374151', 
+                      border: '1px solid #4b5563', 
+                      borderRadius: '4px', 
+                      color: 'white' 
+                    }}
                   />
                 </div>
                 
                 <button
                   onClick={playGame}
-                  disabled={gameState === 'playing' || !betAmount || playGameMutation.isPending}
-                  className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+                  disabled={gameState === 'playing' || !betAmount}
+                  style={{ 
+                    padding: '12px 32px', 
+                    backgroundColor: '#dc2626', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: '8px', 
+                    fontWeight: 'bold',
+                    cursor: (gameState === 'playing' || !betAmount) ? 'not-allowed' : 'pointer',
+                    opacity: (gameState === 'playing' || !betAmount) ? 0.5 : 1
+                  }}
                 >
                   {gameState === 'playing' ? 'Ball Dropping...' : 'DROP BALL'}
                 </button>
                 
-                <div className="text-center">
-                  <p className="text-sm text-gray-400">Your Balance</p>
-                  <p className="text-xl font-bold text-green-400">
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 4px 0' }}>Your Balance</p>
+                  <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#22c55e', margin: '0' }}>
                     {realTimeBalance || wallet.balance} ARK
                   </p>
                 </div>
@@ -601,13 +621,20 @@ export default function ARKlinko() {
 
             {/* Game History */}
             {gameHistory.length > 0 && (
-              <div className="bg-gray-800 p-6 rounded-lg">
-                <h3 className="text-xl font-bold mb-4">Recent Games</h3>
-                <div className="space-y-2">
+              <div style={{ backgroundColor: '#1f2937', padding: '24px', borderRadius: '8px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>Recent Games</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {gameHistory.map((game, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 bg-gray-700 rounded">
+                    <div key={index} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      padding: '12px', 
+                      backgroundColor: '#374151', 
+                      borderRadius: '4px' 
+                    }}>
                       <span>Bet: {game.betAmount} ARK</span>
-                      <span className={game.isWin ? 'text-green-400' : 'text-red-400'}>
+                      <span style={{ color: game.isWin ? '#22c55e' : '#ef4444' }}>
                         {game.isWin ? `Won ${game.payout} ARK` : `Lost ${game.betAmount} ARK`}
                       </span>
                       <span>Multiplier: {game.multiplier}x</span>
@@ -618,12 +645,12 @@ export default function ARKlinko() {
             )}
           </div>
         ) : (
-          <div className="text-center py-20">
-            <h2 className="text-4xl font-bold mb-4">Welcome to ARKlinko</h2>
-            <p className="text-xl text-gray-400 mb-8">
+          <div style={{ textAlign: 'center', padding: '80px 0' }}>
+            <h2 style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '16px' }}>Welcome to ARKlinko</h2>
+            <p style={{ fontSize: '20px', color: '#9ca3af', marginBottom: '32px' }}>
               Connect your ARK wallet to start playing with real cryptocurrency
             </p>
-            <div className="max-w-md mx-auto">
+            <div style={{ maxWidth: '384px', margin: '0 auto' }}>
               <ArkConnect 
                 onWalletConnected={handleWalletConnected}
                 onDisconnect={handleDisconnect}
