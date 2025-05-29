@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import crypto from "crypto";
+const user = { id: 1, username: "demo_player" }; // Simplified for minimal deployment
 
 // Provably Fair Game Logic
 function generateGameResult(serverSeed: string, clientSeed: string, nonce: number): number {
