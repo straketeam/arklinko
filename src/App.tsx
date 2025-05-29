@@ -55,9 +55,9 @@ function PlinkoCanvas({
 
     const pegs: Peg[] = []
     
-    // Use fixed canvas dimensions that match typical game size
-    const canvasWidth = 800
-    const canvasHeight = 600
+    // Use larger canvas dimensions for bigger game
+    const canvasWidth = 1000
+    const canvasHeight = 700
     
     // Define play area - above multiplier boxes
     const playAreaTop = 80
@@ -253,19 +253,19 @@ function PlinkoCanvas({
         ctx.strokeRect(x, y, slotWidth, 50)
         
         ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 12px monospace'
+        ctx.font = 'bold 14px monospace'
         ctx.textAlign = 'center'
         
         // Display different symbols for different slot types
         if (multiplier === -1) {
-          ctx.font = 'bold 18px monospace'
-          ctx.fillText('☠️', x + slotWidth / 2, y + 32)
+          ctx.font = 'bold 20px monospace'
+          ctx.fillText('☠️', x + slotWidth / 2, y + 35)
         } else if (multiplier === 0) {
-          ctx.fillText('0x', x + slotWidth / 2, y + 30)
+          ctx.fillText('0x', x + slotWidth / 2, y + 32)
         } else if (multiplier === -0.5) {
-          ctx.fillText('-0.5x', x + slotWidth / 2, y + 30)
+          ctx.fillText('-0.5x', x + slotWidth / 2, y + 32)
         } else {
-          ctx.fillText(`${multiplier}x`, x + slotWidth / 2, y + 30)
+          ctx.fillText(`${multiplier}x`, x + slotWidth / 2, y + 32)
         }
       })
 
@@ -302,8 +302,8 @@ function PlinkoCanvas({
     const canvas = canvasRef.current
     if (!canvas) return
 
-    canvas.width = 800
-    canvas.height = 600
+    canvas.width = 1000
+    canvas.height = 700
     
     animate()
 
@@ -317,8 +317,8 @@ function PlinkoCanvas({
   return (
     <canvas
       ref={canvasRef}
-      className="w-full max-w-4xl mx-auto bg-gray-800 rounded-lg border border-gray-600 shadow-xl"
-      style={{ width: '100%', height: 'auto', aspectRatio: '4/3' }}
+      className="w-full bg-gray-800 rounded-lg border border-gray-600 shadow-xl"
+      style={{ width: '100%', height: 'auto', aspectRatio: '10/7' }}
     />
   )
 }
@@ -470,8 +470,17 @@ function App() {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
         <div className="bg-gray-800 p-8 rounded-lg border border-gray-700 max-w-md w-full">
-          <h1 className="text-3xl font-bold text-white mb-6 text-center">ARKlinko</h1>
-          <p className="text-gray-300 mb-6 text-center">Connect your ARK wallet to play</p>
+          <div className="text-center mb-6">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <img 
+                src="/attached_assets/Logo_ARK.io.png" 
+                alt="ARK Logo" 
+                className="w-10 h-10 object-contain"
+              />
+              <h1 className="text-3xl font-bold text-white">ARKlinko</h1>
+            </div>
+            <p className="text-gray-300">Connect your ARK wallet to play</p>
+          </div>
           
           {error && (
             <div className="bg-red-900 border border-red-700 text-red-300 p-4 rounded mb-4">
@@ -502,12 +511,20 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent mb-4">
-            ARKlinko
-          </h1>
-          <p className="text-gray-400">Drop the ball and watch it bounce through the pegs!</p>
+      <div className="container mx-auto px-4 py-6">
+        {/* Header with ARK Logo */}
+        <div className="text-center mb-6">
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <img 
+              src="/attached_assets/Logo_ARK.io.png" 
+              alt="ARK Logo" 
+              className="w-16 h-16 object-contain"
+            />
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+              ARKlinko
+            </h1>
+          </div>
+          <p className="text-gray-400 text-lg">Drop the ball and watch it bounce through the pegs!</p>
         </div>
 
         {/* Wallet Info Section */}
@@ -536,7 +553,8 @@ function App() {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-4 gap-6">
+        {/* Main Game Layout */}
+        <div className="grid lg:grid-cols-5 gap-6">
           {/* Game Controls */}
           <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
             <h3 className="text-xl font-bold mb-4">Game Controls</h3>
@@ -563,7 +581,7 @@ function App() {
             <button
               onClick={handlePlay}
               disabled={!canPlay || gameState === "playing"}
-              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg font-bold"
+              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg font-bold text-lg"
             >
               {gameState === "playing" ? "Ball Dropping..." : "Drop Ball"}
             </button>
@@ -587,8 +605,8 @@ function App() {
             )}
           </div>
 
-          {/* Game Canvas */}
-          <div className="lg:col-span-2 bg-gray-800 border border-gray-700 rounded-lg p-6">
+          {/* Game Canvas - Now takes 3 columns for prominence */}
+          <div className="lg:col-span-3 bg-gray-800 border border-gray-700 rounded-lg p-6">
             <PlinkoCanvas 
               onBallLanded={handleBallLanded}
               triggerDrop={triggerDrop}
