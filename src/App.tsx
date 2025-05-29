@@ -11,43 +11,32 @@ function App() {
   useEffect(() => {
     addDebugInfo('🔥 NEW VERSION LOADED - TEST SUCCESSFUL!')
     
-    const arkProvider = (window as any).arkconnect || (window as any).ark
+    let attempts = 0
+    const maxAttempts = 10
     
-    if (arkProvider) {
-      addDebugInfo(`✅ ARK Connect found!`)
-      addDebugInfo(`📋 Available methods: ${Object.keys(arkProvider).join(', ')}`)
+    const checkForArkConnect = () => {
+      attempts++
+      addDebugInfo(`🔍 Checking for ARK Connect (attempt ${attempts}/${maxAttempts})...`)
       
-      // Check for specific properties
-      if (arkProvider.wallet) {
-        addDebugInfo(`💰 wallet property: ${JSON.stringify(arkProvider.wallet)}`)
-      }
-      if (arkProvider.account) {
-        addDebugInfo(`👤 account property: ${JSON.stringify(arkProvider.account)}`)
-      }
-      if (arkProvider.connectedAccount) {
-        addDebugInfo(`🔗 connectedAccount property: ${JSON.stringify(arkProvider.connectedAccount)}`)
-      }
-    } else {
-      addDebugInfo('❌ ARK Connect not found')
-    }
-  }, [])
-
-  return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <h1 className="text-3xl font-bold mb-6">ARK Connect Test</h1>
+      const arkProvider = (window as any).arkconnect || (window as any).ark
       
-      <div className="bg-gray-800 p-4 rounded-lg">
-        <h2 className="text-xl mb-4">Debug Information:</h2>
-        <div className="space-y-2">
-          {debugInfo.map((info, index) => (
-            <div key={index} className="text-sm font-mono bg-gray-700 p-2 rounded">
-              {info}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default App
+      if (arkProvider) {
+        addDebugInfo(`✅ ARK Connect found on attempt ${attempts}!`)
+        addDebugInfo(`📋 Available methods: ${Object.keys(arkProvider).join(', ')}`)
+        addDebugInfo(`📋 Available properties: ${Object.getOwnPropertyNames(arkProvider).join(', ')}`)
+        
+        // Check if it's connected
+        if (arkProvider.isConnected) {
+          const connected = arkProvider.isConnected()
+          addDebugInfo(`🔗 isConnected(): ${connected}`)
+        }
+        
+        // Check for wallet data in various locations
+        const walletPaths = ['wallet', 'account', 'connectedAccount', 'activeAccount', 'currentAccount']
+        walletPaths.forEach(path => {
+          if (arkProvider[path]) {
+            addDebugInfo(`💰 ${path}: ${JSON.stringify(arkProvider[path])}`)
+          }
+        })
+        
+        // Try calling methods
