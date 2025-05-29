@@ -292,11 +292,13 @@ function showNotification(message: string, type: 'success' | 'error' = 'success'
   document.body.appendChild(notification)
   
   setTimeout(() => {
-    document.body.removeChild(notification)
+    if (document.body.contains(notification)) {
+      document.body.removeChild(notification)
+    }
   }, 3000)
 }
 
-// ARK Connect integration
+// Enhanced ARK Connect integration with better compatibility
 function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
   onWalletConnected: (wallet: ArkWallet) => void
   onDisconnect: () => void
@@ -307,55 +309,101 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
   const checkExistingConnection = async () => {
     if (typeof window !== 'undefined' && window.arkconnect) {
       try {
-        const account = await window.arkconnect.getAccount()
-        if (account) {
+        console.log('Checking for existing ARK Connect connection...')
+        
+        // Try different methods to check connection
+        let account = null
+        
+        // Method 1: getAccount
+        try {
+          account = await window.arkconnect.getAccount()
+        } catch (error) {
+          console.log('getAccount failed, trying alternative method')
+        }
+        
+        // Method 2: Check if connected first
+        if (!account && window.arkconnect.isConnected && window.arkconnect.isConnected()) {
+          try {
+            account = await window.arkconnect.connect()
+          } catch (error) {
+            console.log('Alternative connection method failed')
+          }
+        }
+        
+        if (account && account.address) {
+          console.log('Found existing connection:', account.address)
           const balance = await window.arkconnect.getBalance(account.address)
           onWalletConnected({
             address: account.address,
-            publicKey: account.publicKey,
+            publicKey: account.publicKey || '',
             balance: (parseFloat(balance) / 100000000).toString()
           })
+        } else {
+          console.log('No existing connection found')
         }
       } catch (error) {
-        console.log('No existing account found')
+        console.log('Connection check failed:', error)
       }
     }
   }
 
   useEffect(() => {
-    checkExistingConnection()
+    // Delay the connection check to ensure extension is loaded
+    const timer = setTimeout(() => {
+      checkExistingConnection()
+    }, 1000)
+    
+    return () => clearTimeout(timer)
   }, [])
 
   const connectWallet = async () => {
+    console.log('Attempting to connect ARK wallet...')
+    
     if (!window.arkconnect) {
+      console.error('ARK Connect extension not found')
       showNotification('Please install the ARK Connect browser extension to play ARKlinko.', 'error')
       return
     }
 
     setIsConnecting(true)
     try {
+      console.log('Calling arkconnect.connect()...')
       const account = await window.arkconnect.connect()
+      console.log('Connect successful:', account)
+      
+      if (!account || !account.address) {
+        throw new Error('No account returned from ARK Connect')
+      }
+      
+      console.log('Getting balance for:', account.address)
       const balance = await window.arkconnect.getBalance(account.address)
+      console.log('Balance received:', balance)
       
       const wallet: ArkWallet = {
         address: account.address,
-        publicKey: account.publicKey,
+        publicKey: account.publicKey || '',
         balance: (parseFloat(balance) / 100000000).toString()
       }
       
       onWalletConnected(wallet)
       showNotification(`Connected to ${account.address.substring(0, 10)}...`)
     } catch (error) {
-      showNotification('Failed to connect ARK wallet. Please try again.', 'error')
+      console.error('ARK Connect error:', error)
+      showNotification(`Connection failed: ${error.message || 'Unknown error'}`, 'error')
     } finally {
       setIsConnecting(false)
     }
   }
 
   const disconnect = async () => {
-    if (window.arkconnect) {
-      await window.arkconnect.disconnect()
+    try {
+      if (window.arkconnect && window.arkconnect.disconnect) {
+        await window.arkconnect.disconnect()
+      }
+    } catch (error) {
+      console.error('Disconnect error:', error)
     }
+    
     onDisconnect()
     showNotification('ARK wallet has been disconnected.')
   }
@@ -418,7 +466,7 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
   )
 }
 
-// Main ARKlinko Game Component
+// Main ARKlinko Game Component - SINGLE INSTANCE ONLY
 export default function ARKlinko() {
   const [wallet, setWallet] = useState<ArkWallet | null>(null)
   const [betAmount, setBetAmount] = useState('')
@@ -451,13 +499,16 @@ export default function ARKlinko() {
   }, [wallet?.address])
 
   const handleWalletConnected = (connectedWallet: ArkWallet) => {
+    console.log('Wallet connected:', connectedWallet.address)
     setWallet(connectedWallet)
   }
 
   const handleDisconnect = () => {
+    console.log('Wallet disconnected')
     setWallet(null)
     setBetAmount('')
     setGameHistory([])
+    setRealTimeBalance('')
   }
 
   const handleBallLanded = async (multiplier: number) => {
@@ -518,7 +569,7 @@ export default function ARKlinko() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#111827', color: 'white' }}>
-      {/* Header */}
+      {/* Header - SINGLE INSTANCE */}
       <div style={{ backgroundColor: '#1f2937', borderBottom: '1px solid #374151' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -540,6 +591,7 @@ export default function ARKlinko() {
               </div>
             </div>
             
+            {/* SINGLE wallet connection component */}
             <div style={{ width: '320px' }}>
               <ArkConnect 
                 onWalletConnected={handleWalletConnected}
@@ -650,13 +702,7 @@ export default function ARKlinko() {
             <p style={{ fontSize: '20px', color: '#9ca3af', marginBottom: '32px' }}>
               Connect your ARK wallet to start playing with real cryptocurrency
             </p>
-            <div style={{ maxWidth: '384px', margin: '0 auto' }}>
-              <ArkConnect 
-                onWalletConnected={handleWalletConnected}
-                onDisconnect={handleDisconnect}
-                connectedWallet={wallet}
-              />
-            </div>
+            {/* NO duplicate ArkConnect component here - using state-based rendering */}
           </div>
         )}
       </div>
