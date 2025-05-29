@@ -33,7 +33,7 @@ const GRAVITY = 0.3
 const BOUNCE_DAMPING = 0.7
 const HORIZONTAL_DAMPING = 0.98
 
-// Plinko multipliers
+// Plinko multipliers with proper -0.5x handling
 const MULTIPLIERS = [10, 5, 4, 3, 2, -0.5, 1.5, 1.25, 0, -1, 0, 1.25, 1.5, -0.5, 2, 3, 4, 5, 10]
 
 // Simple notification function
@@ -217,9 +217,9 @@ function PlinkoCanvas({
       
       let displayText = ''
       if (multiplier === -1) {
-        displayText = 'LOSE'
+        displayText = '☠'
       } else if (multiplier === -0.5) {
-        displayText = '0.5x'
+        displayText = '-0.5x'
       } else if (multiplier === 0) {
         displayText = 'EVEN'
       } else {
@@ -297,112 +297,103 @@ function PlinkoCanvas({
   )
 }
 
-// ARK Connect with detailed debugging
-function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
+// ARK Connect with real-time balance updates
+function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanceUpdate }: {
   onWalletConnected: (wallet: ArkWallet) => void
   onDisconnect: () => void
   connectedWallet?: ArkWallet | null
+  onBalanceUpdate?: (balance: string) => void
 }) {
   const [isConnecting, setIsConnecting] = useState(false)
 
-  const checkExistingConnection = async () => {
-    if (typeof window !== 'undefined' && window.arkconnect) {
-      try {
-        console.log('Checking for existing ARK Connect connection...')
-        console.log('Available ARK Connect methods:', Object.keys(window.arkconnect))
-        console.log('Skipping automatic connection check')
-      } catch (error) {
-        console.log('Connection check failed:', error)
+  // Fetch real-time balance from ARK API
+  const fetchRealTimeBalance = useCallback(async (address: string) => {
+    try {
+      const response = await fetch(`https://api.ark.io/api/v2/wallets/${address}`)
+      const data = await response.json()
+      
+      if (data.data && data.data.balance) {
+        const balance = (parseInt(data.data.balance) / 100000000).toString()
+        if (onBalanceUpdate) {
+          onBalanceUpdate(balance)
+        }
+        return balance
       }
+    } catch (error) {
+      console.error('Error fetching real-time balance:', error)
     }
-  }
+    return null
+  }, [onBalanceUpdate])
 
+  // Auto-update balance every 5 seconds when connected
   useEffect(() => {
-    const timer = setTimeout(() => {
-      checkExistingConnection()
-    }, 1000)
+    if (!connectedWallet?.address) return
+
+    const interval = setInterval(() => {
+      fetchRealTimeBalance(connectedWallet.address)
+    }, 5000)
     
-    return () => clearTimeout(timer)
-  }, [])
+    return () => clearInterval(interval)
+  }, [connectedWallet?.address, fetchRealTimeBalance])
 
   const connectWallet = async () => {
-    console.log('Attempting to connect ARK wallet...')
-    
     if (!window.arkconnect) {
-      console.error('ARK Connect extension not found')
-      showNotification('Please install the ARK Connect browser extension to play ARKlinko.', 'error')
+      showNotification('Please install the ARK Connect browser extension.', 'error')
       return
     }
 
     setIsConnecting(true)
     
     try {
-      console.log('Attempting fresh connection...')
-      const result = await window.arkconnect.connect()
-      console.log('Connect result:', result)
-      console.log('Result type:', typeof result)
-      
-      // Detailed logging of the actual response structure
-      if (result && typeof result === 'object') {
-        console.log('Result keys:', Object.keys(result))
-        
-        // Log each property name and value
-        Object.keys(result).forEach(key => {
-          console.log(`Property "${key}":`, result[key], `(type: ${typeof result[key]})`)
-        })
-        
-        // Try to extract address from any reasonable property
-        let address = ''
-        let publicKey = ''
-        
-        // Check all properties for potential address values
-        for (const [key, value] of Object.entries(result)) {
-          console.log(`Checking property "${key}" with value:`, value)
-          
-          if (typeof value === 'string' && value.length > 20 && value.length < 50) {
-            // Looks like it could be an address
-            console.log(`Potential address found in property "${key}":`, value)
-            if (!address) address = value
-          }
-          
-          if (key.toLowerCase().includes('public') && typeof value === 'string') {
-            console.log(`Potential public key found in property "${key}":`, value)
-            publicKey = value
-          }
+      // Disconnect first to clear any existing connection state
+      if (window.arkconnect.disconnect) {
+        try {
+          await window.arkconnect.disconnect()
+          await new Promise(resolve => setTimeout(resolve, 500))
+        } catch (disconnectError) {
+          console.log('Disconnect not needed:', disconnectError)
         }
-        
-        console.log('Final extracted address:', address)
-        console.log('Final extracted publicKey:', publicKey)
-        
-        if (!address) {
-          // Show the user what we found to help debug
-          const properties = Object.keys(result).map(key => `${key}: ${result[key]}`).join(', ')
-          throw new Error(`Cannot find wallet address. Found properties: ${properties}`)
-        }
-        
-        console.log('Getting balance for address:', address)
-        const balanceResult = await window.arkconnect.getBalance(address)
-        console.log('Balance result:', balanceResult)
-        
-        const balanceInArk = (parseFloat(balanceResult) / 100000000).toString()
-        
-        const wallet: ArkWallet = {
-          address: address,
-          publicKey: publicKey,
-          balance: balanceInArk
-        }
-        
-        console.log('Final wallet object:', wallet)
-        onWalletConnected(wallet)
-        showNotification(`Connected to ${address.substring(0, 10)}...`)
-        
-      } else {
-        throw new Error(`Unexpected result type: ${typeof result}`)
       }
+      
+      const result = await window.arkconnect.connect()
+      
+      let address = ''
+      let publicKey = ''
+      
+      if (typeof result === 'string') {
+        address = result
+      } else if (result?.address) {
+        address = result.address
+        publicKey = result.publicKey || ''
+      }
+      
+      if (!address) {
+        throw new Error('No wallet address received from ARK Connect')
+      }
+      
+      // Get initial balance from ARK Connect
+      const balance = await window.arkconnect.getBalance(address)
+      const arkBalance = (parseFloat(balance) / 100000000).toString()
+      
+      // Get real-time balance from API
+      const realTimeBalance = await fetchRealTimeBalance(address)
+      
+      const wallet: ArkWallet = {
+        address: address,
+        publicKey: publicKey,
+        balance: realTimeBalance || arkBalance
+      }
+      
+      onWalletConnected(wallet)
+      showNotification(`Connected to ${address.substring(0, 10)}...`)
       
     } catch (error: any) {
       console.error('ARK Connect error:', error)
-      showNotification(`Connection failed: ${error.message || 'Unknown error'}. Check console for details.`, 'error')
+      if (error.message?.includes('already connected')) {
+        showNotification('Wallet already connected. Please refresh page first.', 'error')
+      } else {
+        showNotification(`Connection failed: ${error.message}`, 'error')
+      }
     } finally {
       setIsConnecting(false)
     }
@@ -410,7 +401,7 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
 
   const disconnect = async () => {
     try {
-      if (window.arkconnect && window.arkconnect.disconnect) {
+      if (window.arkconnect?.disconnect) {
         await window.arkconnect.disconnect()
       }
     } catch (error) {
@@ -418,7 +409,7 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
     }
     
     onDisconnect()
-    showNotification('ARK wallet has been disconnected.')
+    showNotification('ARK wallet disconnected.')
   }
 
   if (connectedWallet) {
@@ -458,7 +449,7 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
         Connect ARK Wallet
       </h3>
       <p style={{ color: '#9ca3af', marginBottom: '16px' }}>
-        Connect your ARK wallet to play ARKlinko with real cryptocurrency
+        Connect your ARK wallet to play ARKlinko
       </p>
       <button
         onClick={connectWallet}
@@ -479,41 +470,26 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
   )
 }
 
-// Main ARKlinko Game Component
+// Main ARKlinko Game Component with enhanced balance handling
 export default function ARKlinko() {
   const [wallet, setWallet] = useState<ArkWallet | null>(null)
   const [betAmount, setBetAmount] = useState('')
   const [gameState, setGameState] = useState<'idle' | 'playing'>('idle')
   const [triggerDrop, setTriggerDrop] = useState(false)
   const [gameHistory, setGameHistory] = useState<any[]>([])
-  const [realTimeBalance, setRealTimeBalance] = useState<string>('')
-
-  // Fetch real-time balance
-  useEffect(() => {
-    if (!wallet?.address) return
-
-    const fetchBalance = async () => {
-      try {
-        const response = await fetch(`https://api.ark.io/api/v2/wallets/${wallet.address}`)
-        const data = await response.json()
-        
-        if (data.data && data.data.balance) {
-          setRealTimeBalance((parseInt(data.data.balance) / 100000000).toString())
-        }
-      } catch (error) {
-        console.error('Error fetching balance:', error)
-      }
-    }
-
-    fetchBalance()
-    const interval = setInterval(fetchBalance, 10000)
-    
-    return () => clearInterval(interval)
-  }, [wallet?.address])
+  const [currentBalance, setCurrentBalance] = useState<string>('')
 
   const handleWalletConnected = (connectedWallet: ArkWallet) => {
     console.log('Wallet connected:', connectedWallet.address)
     setWallet(connectedWallet)
+    setCurrentBalance(connectedWallet.balance)
+  }
+
+  const handleBalanceUpdate = (newBalance: string) => {
+    setCurrentBalance(newBalance)
+    if (wallet) {
+      setWallet(prev => prev ? { ...prev, balance: newBalance } : null)
+    }
   }
 
   const handleDisconnect = () => {
@@ -521,7 +497,7 @@ export default function ARKlinko() {
     setWallet(null)
     setBetAmount('')
     setGameHistory([])
-    setRealTimeBalance('')
+    setCurrentBalance('')
   }
 
   const handleBallLanded = async (multiplier: number) => {
@@ -546,11 +522,35 @@ export default function ARKlinko() {
       const data = await response.json()
       setGameHistory(prev => [data, ...prev.slice(0, 9)])
       
-      if (data.isWin) {
-        showNotification(`You Won! ${data.payout} ARK (${data.multiplier}x)`)
+      // Update balance based on game result
+      if (multiplier === -1) {
+        showNotification(`Ball hit skull! Lost ${bet} ARK`, 'error')
+      } else if (multiplier === -0.5) {
+        showNotification(`Half-loss! Lost ${(bet * 0.5).toFixed(4)} ARK`, 'error')
+      } else if (multiplier === 0) {
+        showNotification(`Break even! Got ${bet} ARK back`)
+      } else if (multiplier >= 1.25) {
+        showNotification(`You Won! ${(bet * multiplier).toFixed(4)} ARK (${multiplier}x)`)
       } else {
-        showNotification(`Lost ${data.betAmount} ARK`, 'error')
+        showNotification(`Small win: ${(bet * multiplier).toFixed(4)} ARK (${multiplier}x)`)
       }
+      
+      // Force balance refresh after game
+      if (wallet?.address) {
+        setTimeout(async () => {
+          try {
+            const response = await fetch(`https://api.ark.io/api/v2/wallets/${wallet.address}`)
+            const data = await response.json()
+            if (data.data?.balance) {
+              const newBalance = (parseInt(data.data.balance) / 100000000).toString()
+              handleBalanceUpdate(newBalance)
+            }
+          } catch (error) {
+            console.error('Error refreshing balance:', error)
+          }
+        }, 1000)
+      }
+      
     } catch (error: any) {
       showNotification(`Game Error: ${error.message}`, 'error')
     }
@@ -564,14 +564,14 @@ export default function ARKlinko() {
 
   const playGame = () => {
     const bet = parseFloat(betAmount)
-    const currentBalance = parseFloat(realTimeBalance || wallet?.balance || '0')
+    const balance = parseFloat(currentBalance || wallet?.balance || '0')
     
     if (!bet || bet < MIN_BET || bet > MAX_BET) {
       showNotification(`Bet must be between ${MIN_BET} and ${MAX_BET} ARK`, 'error')
       return
     }
     
-    if (bet > currentBalance) {
+    if (bet > balance) {
       showNotification('Not enough ARK in your wallet', 'error')
       return
     }
@@ -579,6 +579,8 @@ export default function ARKlinko() {
     setGameState('playing')
     setTriggerDrop(true)
   }
+
+  const displayBalance = currentBalance || wallet?.balance || '0'
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#111827', color: 'white' }}>
@@ -609,6 +611,7 @@ export default function ARKlinko() {
                 onWalletConnected={handleWalletConnected}
                 onDisconnect={handleDisconnect}
                 connectedWallet={wallet}
+                onBalanceUpdate={handleBalanceUpdate}
               />
             </div>
           </div>
@@ -675,10 +678,11 @@ export default function ARKlinko() {
                 </button>
                 
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 4px 0' }}>Your Balance</p>
+                  <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 4px 0' }}>Live Balance</p>
                   <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#22c55e', margin: '0' }}>
-                    {realTimeBalance || wallet.balance} ARK
+                    {displayBalance} ARK
                   </p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Updates every 5s</p>
                 </div>
               </div>
             </div>
