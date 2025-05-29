@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import arkLogo from "@assets/Logo_ARK.io.png"
 
 interface ArkWallet {
   address: string
@@ -23,8 +24,8 @@ interface Peg {
 }
 
 // Plinko game physics constants
-const BALL_RADIUS = 8
-const PEG_RADIUS = 4
+const BALL_RADIUS = 10
+const PEG_RADIUS = 5
 const GRAVITY = 0.3
 const BOUNCE_DAMPING = 0.7
 const HORIZONTAL_DAMPING = 0.98
@@ -55,20 +56,20 @@ function PlinkoCanvas({
 
     const pegs: Peg[] = []
     
-    // Use larger canvas dimensions for bigger game
-    const canvasWidth = 1000
-    const canvasHeight = 700
+    // Much larger canvas dimensions for prominent web game feel
+    const canvasWidth = 1400
+    const canvasHeight = 900
     
     // Define play area - above multiplier boxes
-    const playAreaTop = 80
-    const playAreaBottom = canvasHeight - 80 // Leave space for multipliers
-    const playAreaLeft = 50
-    const playAreaRight = canvasWidth - 50
+    const playAreaTop = 100
+    const playAreaBottom = canvasHeight - 100 // Leave space for multipliers
+    const playAreaLeft = 70
+    const playAreaRight = canvasWidth - 70
     const playAreaWidth = playAreaRight - playAreaLeft
     const playAreaHeight = playAreaBottom - playAreaTop
     
-    // Create 18 rows of pegs spanning the entire play area for denser board
-    const numRows = 18
+    // Create 20 rows of pegs for even denser board
+    const numRows = 20
     
     for (let row = 0; row < numRows; row++) {
       // Y position spreads evenly from top to bottom of play area
@@ -113,8 +114,8 @@ function PlinkoCanvas({
         const canvas = canvasRef.current
         if (canvas && canvas.width > 0 && canvas.height > 0) {
           const newBall: Ball = {
-            x: canvas.width / 2 + (Math.random() - 0.5) * 20,
-            y: 50,
+            x: canvas.width / 2 + (Math.random() - 0.5) * 30,
+            y: 60,
             vx: (Math.random() - 0.5) * 2,
             vy: 0,
             radius: BALL_RADIUS,
@@ -190,7 +191,7 @@ function PlinkoCanvas({
         ball.vx = -ball.vx * BOUNCE_DAMPING
       }
 
-      if (ball.y > canvas.height - 60) {
+      if (ball.y > canvas.height - 80) {
         ball.active = false
         
         const slotWidth = canvas.width / MULTIPLIERS.length
@@ -212,20 +213,29 @@ function PlinkoCanvas({
     if (!canvas || !ctx || canvas.width === 0 || canvas.height === 0) return
 
     try {
-      ctx.fillStyle = '#1f2937'
+      // Dark background
+      ctx.fillStyle = '#111827'
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-      ctx.fillStyle = '#6b7280'
+      // Draw pegs with better visibility
+      ctx.fillStyle = '#9ca3af'
       pegsRef.current.forEach(peg => {
         ctx.beginPath()
         ctx.arc(peg.x, peg.y, peg.radius, 0, Math.PI * 2)
         ctx.fill()
+        
+        // Add glow effect
+        ctx.shadowColor = '#9ca3af'
+        ctx.shadowBlur = 3
+        ctx.fill()
+        ctx.shadowBlur = 0
       })
 
+      // Draw multiplier slots at bottom
       const slotWidth = canvas.width / MULTIPLIERS.length
       MULTIPLIERS.forEach((multiplier, index) => {
         const x = index * slotWidth
-        const y = canvas.height - 50
+        const y = canvas.height - 70
         
         // Color slots based on type
         let slotColor
@@ -246,45 +256,49 @@ function PlinkoCanvas({
         }
         
         ctx.fillStyle = slotColor
-        ctx.fillRect(x, y, slotWidth, 50)
+        ctx.fillRect(x, y, slotWidth, 70)
         
         ctx.strokeStyle = '#374151'
-        ctx.lineWidth = 1
-        ctx.strokeRect(x, y, slotWidth, 50)
+        ctx.lineWidth = 2
+        ctx.strokeRect(x, y, slotWidth, 70)
         
         ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 14px monospace'
+        ctx.font = 'bold 18px monospace'
         ctx.textAlign = 'center'
         
         // Display different symbols for different slot types
         if (multiplier === -1) {
-          ctx.font = 'bold 20px monospace'
-          ctx.fillText('☠️', x + slotWidth / 2, y + 35)
+          ctx.font = 'bold 24px monospace'
+          ctx.fillText('☠️', x + slotWidth / 2, y + 45)
         } else if (multiplier === 0) {
-          ctx.fillText('0x', x + slotWidth / 2, y + 32)
+          ctx.fillText('0x', x + slotWidth / 2, y + 40)
         } else if (multiplier === -0.5) {
-          ctx.fillText('-0.5x', x + slotWidth / 2, y + 32)
+          ctx.fillText('-0.5x', x + slotWidth / 2, y + 40)
         } else {
-          ctx.fillText(`${multiplier}x`, x + slotWidth / 2, y + 32)
+          ctx.fillText(`${multiplier}x`, x + slotWidth / 2, y + 40)
         }
       })
 
+      // Draw balls with enhanced visuals
       ballsRef.current.forEach(ball => {
         if (!ball.active) return
         
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'
         ctx.beginPath()
-        ctx.arc(ball.x + 2, ball.y + 2, ball.radius, 0, Math.PI * 2)
+        ctx.arc(ball.x + 3, ball.y + 3, ball.radius, 0, Math.PI * 2)
         ctx.fill()
         
+        // Main ball
         ctx.fillStyle = '#f59e0b'
         ctx.beginPath()
         ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2)
         ctx.fill()
         
+        // Highlight
         ctx.fillStyle = '#fbbf24'
         ctx.beginPath()
-        ctx.arc(ball.x - 2, ball.y - 2, ball.radius / 3, 0, Math.PI * 2)
+        ctx.arc(ball.x - 3, ball.y - 3, ball.radius / 2, 0, Math.PI * 2)
         ctx.fill()
       })
     } catch (error) {
@@ -302,8 +316,8 @@ function PlinkoCanvas({
     const canvas = canvasRef.current
     if (!canvas) return
 
-    canvas.width = 1000
-    canvas.height = 700
+    canvas.width = 1400
+    canvas.height = 900
     
     animate()
 
@@ -317,8 +331,8 @@ function PlinkoCanvas({
   return (
     <canvas
       ref={canvasRef}
-      className="w-full bg-gray-800 rounded-lg border border-gray-600 shadow-xl"
-      style={{ width: '100%', height: 'auto', aspectRatio: '10/7' }}
+      className="w-full bg-gray-900 rounded-xl border-2 border-gray-600 shadow-2xl"
+      style={{ width: '100%', height: 'auto', aspectRatio: '14/9' }}
     />
   )
 }
@@ -471,13 +485,13 @@ function App() {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
         <div className="bg-gray-800 p-8 rounded-lg border border-gray-700 max-w-md w-full">
           <div className="text-center mb-6">
-            <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="flex items-center justify-center gap-4 mb-4">
               <img 
-                src="/attached_assets/Logo_ARK.io.png" 
+                src={arkLogo} 
                 alt="ARK Logo" 
-                className="w-10 h-10 object-contain"
+                className="w-12 h-12 object-contain"
               />
-              <h1 className="text-3xl font-bold text-white">ARKlinko</h1>
+              <h1 className="text-4xl font-bold text-white">ARKlinko</h1>
             </div>
             <p className="text-gray-300">Connect your ARK wallet to play</p>
           </div>
@@ -513,38 +527,38 @@ function App() {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
       <div className="container mx-auto px-4 py-6">
         {/* Header with ARK Logo */}
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-4 mb-4">
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-6 mb-6">
             <img 
-              src="/attached_assets/Logo_ARK.io.png" 
+              src={arkLogo} 
               alt="ARK Logo" 
-              className="w-16 h-16 object-contain"
+              className="w-20 h-20 object-contain"
             />
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+            <h1 className="text-6xl font-bold bg-gradient-to-r from-red-400 via-red-500 to-red-600 bg-clip-text text-transparent">
               ARKlinko
             </h1>
           </div>
-          <p className="text-gray-400 text-lg">Drop the ball and watch it bounce through the pegs!</p>
+          <p className="text-gray-400 text-xl">Drop the ball and watch it bounce through the pegs!</p>
         </div>
 
         {/* Wallet Info Section */}
-        <div className="flex justify-center mb-6">
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-            <div className="flex items-center gap-6">
+        <div className="flex justify-center mb-8">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+            <div className="flex items-center gap-8">
               <div className="text-center">
                 <p className="text-sm text-gray-400">Connected Wallet</p>
-                <p className="font-mono text-sm">{wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}</p>
+                <p className="font-mono text-lg">{wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}</p>
               </div>
-              <div className="w-px h-8 bg-gray-600"></div>
+              <div className="w-px h-12 bg-gray-600"></div>
               <div className="text-center">
                 <p className="text-sm text-gray-400">Balance</p>
-                <p className="text-lg font-bold text-green-400">{parseFloat(wallet.balance).toFixed(8)} ARK</p>
+                <p className="text-2xl font-bold text-green-400">{parseFloat(wallet.balance).toFixed(8)} ARK</p>
               </div>
-              <div className="w-px h-8 bg-gray-600"></div>
+              <div className="w-px h-12 bg-gray-600"></div>
               <div className="text-center">
                 <button 
                   onClick={disconnectWallet}
-                  className="border border-red-600 text-red-400 hover:bg-red-600 hover:text-white px-3 py-1 rounded text-sm"
+                  className="border border-red-600 text-red-400 hover:bg-red-600 hover:text-white px-4 py-2 rounded text-sm"
                 >
                   Disconnect
                 </button>
@@ -553,79 +567,86 @@ function App() {
           </div>
         </div>
 
-        {/* Main Game Layout */}
-        <div className="grid lg:grid-cols-5 gap-6">
-          {/* Game Controls */}
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-            <h3 className="text-xl font-bold mb-4">Game Controls</h3>
-            
-            <div className="mb-4">
-              <label className="block text-sm text-gray-400 mb-2">Bet Amount (ARK)</label>
-              <input
-                type="number"
-                value={betAmount}
-                onChange={(e) => handleBetAmountChange(e.target.value)}
-                placeholder="1.00"
-                min="0.01"
-                max="5"
-                step="0.01"
-                className="w-full bg-gray-700 text-white p-3 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
-              />
-            </div>
-
-            <div className="text-sm text-gray-400 mb-4">
-              <p>Min bet: 0.01 ARK</p>
-              <p>Max bet: 5.00 ARK</p>
-            </div>
-
-            <button
-              onClick={handlePlay}
-              disabled={!canPlay || gameState === "playing"}
-              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg font-bold text-lg"
-            >
-              {gameState === "playing" ? "Ball Dropping..." : "Drop Ball"}
-            </button>
-
-            {gameState === "finished" && (
-              <div className="mt-4 p-4 bg-gray-700 rounded-lg">
-                <p className="text-sm text-gray-400">Last Result:</p>
-                <p className="text-lg font-bold">
-                  {lastMultiplier}x multiplier
-                </p>
-                <p className="text-sm">
-                  Payout: {payout} ARK
-                </p>
-                <button
-                  onClick={handleNewGame}
-                  className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded"
-                >
-                  Play Again
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Game Canvas - Now takes 3 columns for prominence */}
-          <div className="lg:col-span-3 bg-gray-800 border border-gray-700 rounded-lg p-6">
+        {/* Main Game Canvas - Full Width */}
+        <div className="mb-8">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-8">
             <PlinkoCanvas 
               onBallLanded={handleBallLanded}
               triggerDrop={triggerDrop}
               onTriggerComplete={handleTriggerComplete}
             />
           </div>
+        </div>
 
-          {/* Game History */}
+        {/* Bet Controls Section - Under Game */}
+        <div className="mb-8">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 max-w-2xl mx-auto">
+            <h3 className="text-2xl font-bold mb-6 text-center">Game Controls</h3>
+            
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-lg text-gray-400 mb-3">Bet Amount (ARK)</label>
+                <input
+                  type="number"
+                  value={betAmount}
+                  onChange={(e) => handleBetAmountChange(e.target.value)}
+                  placeholder="1.00"
+                  min="0.01"
+                  max="5"
+                  step="0.01"
+                  className="w-full bg-gray-700 text-white p-4 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-lg"
+                />
+                <div className="text-sm text-gray-400 mt-2">
+                  <p>Min bet: 0.01 ARK • Max bet: 5.00 ARK</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col justify-center">
+                <button
+                  onClick={handlePlay}
+                  disabled={!canPlay || gameState === "playing"}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-4 px-6 rounded-lg font-bold text-xl mb-4"
+                >
+                  {gameState === "playing" ? "Ball Dropping..." : "🎯 Drop Ball"}
+                </button>
+
+                {gameState === "finished" && (
+                  <div className="p-4 bg-gray-700 rounded-lg">
+                    <p className="text-sm text-gray-400">Last Result:</p>
+                    <p className="text-xl font-bold">
+                      {lastMultiplier}x multiplier
+                    </p>
+                    <p className="text-lg">
+                      Payout: {payout} ARK
+                    </p>
+                    <button
+                      onClick={handleNewGame}
+                      className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded"
+                    >
+                      Play Again
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Game History Section - Under Everything */}
+        <div className="max-w-4xl mx-auto">
           <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-            <h3 className="text-xl font-bold mb-4">Recent Games</h3>
-            <div className="space-y-2">
+            <h3 className="text-2xl font-bold mb-6 text-center">Recent Games</h3>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {gameHistory.length === 0 ? (
-                <p className="text-gray-400 text-sm">No games played yet</p>
+                <div className="col-span-full text-center">
+                  <p className="text-gray-400 text-lg">No games played yet</p>
+                </div>
               ) : (
                 gameHistory.map((game) => (
-                  <div key={game.id} className="bg-gray-700 p-3 rounded">
-                    <div className="flex justify-between text-sm">
-                      <span>Game #{game.id}</span>
-                      <span className={game.payout > game.bet ? 'text-green-400' : 'text-red-400'}>
+                  <div key={game.id} className="bg-gray-700 p-4 rounded-lg">
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="font-bold">Game #{game.id}</span>
+                      <span className={game.payout > game.bet ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
                         {game.payout > game.bet ? '+' : ''}{(game.payout - game.bet).toFixed(2)} ARK
                       </span>
                     </div>
