@@ -345,16 +345,65 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
     setIsConnecting(true)
     
     try {
-      // Skip disconnect step since domain is not connected
       console.log('Attempting ARK Connect...')
+      
+      // Check if already connected and get existing account
+      if (window.arkconnect.getAccount) {
+        try {
+          const existingAccount = await window.arkconnect.getAccount()
+          console.log('Existing account check:', existingAccount)
+          
+          if (existingAccount && existingAccount.address) {
+            console.log('Found existing connection, using it')
+            const balance = await window.arkconnect.getBalance(existingAccount.address)
+            const arkBalance = (parseFloat(balance) / 100000000).toString()
+            
+            const wallet: ArkWallet = {
+              address: existingAccount.address,
+              publicKey: existingAccount.publicKey || '',
+              balance: arkBalance
+            }
+            
+            onWalletConnected(wallet)
+            showNotification(`Connected to ${existingAccount.address.substring(0, 10)}...`)
+            return
+          }
+        } catch (getAccountError) {
+          console.log('No existing account found:', getAccountError)
+        }
+      }
       
       const result = await window.arkconnect.connect()
       console.log('ARK Connect result:', result)
       console.log('Result type:', typeof result)
       console.log('Result properties:', result ? Object.keys(result) : 'null')
       
-      // Check if result is an error object
+      // Check if result is an error object with "already connected"
       if (result && typeof result === 'object' && result.status === 'failed') {
+        if (result.message?.includes('already connected')) {
+          // Try to get the account data directly since it's already connected
+          if (window.arkconnect.getAccount) {
+            try {
+              const account = await window.arkconnect.getAccount()
+              if (account && account.address) {
+                const balance = await window.arkconnect.getBalance(account.address)
+                const arkBalance = (parseFloat(balance) / 100000000).toString()
+                
+                const wallet: ArkWallet = {
+                  address: account.address,
+                  publicKey: account.publicKey || '',
+                  balance: arkBalance
+                }
+                
+                onWalletConnected(wallet)
+                showNotification(`Connected to ${account.address.substring(0, 10)}...`)
+                return
+              }
+            } catch (accountError) {
+              console.error('Failed to get account after already connected:', accountError)
+            }
+          }
+        }
         throw new Error(result.message || 'ARK Connect failed')
       }
       
@@ -750,6 +799,7 @@ declare global {
     arkconnect?: {
       connect: () => Promise<any>;
       disconnect: () => Promise<void>;
+      getAccount: () => Promise<{ address: string; publicKey: string } | null>;
       getBalance: (address: string) => Promise<string>;
       isConnected: () => boolean;
       request: (method: string, params?: any) => Promise<any>;
