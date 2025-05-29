@@ -297,7 +297,7 @@ function PlinkoCanvas({
   )
 }
 
-// ARK Connect with real-time balance updates
+// ARK Connect with detailed debugging and real-time balance updates
 function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanceUpdate }: {
   onWalletConnected: (wallet: ArkWallet) => void
   onDisconnect: () => void
@@ -345,30 +345,50 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
     setIsConnecting(true)
     
     try {
-      // Disconnect first to clear any existing connection state
-      if (window.arkconnect.disconnect) {
-        try {
-          await window.arkconnect.disconnect()
-          await new Promise(resolve => setTimeout(resolve, 500))
-        } catch (disconnectError) {
-          console.log('Disconnect not needed:', disconnectError)
-        }
-      }
+      // Skip disconnect step since domain is not connected
+      console.log('Attempting ARK Connect...')
       
       const result = await window.arkconnect.connect()
+      console.log('ARK Connect result:', result)
+      console.log('Result type:', typeof result)
+      console.log('Result properties:', result ? Object.keys(result) : 'null')
+      
+      // Check if result is an error object
+      if (result && typeof result === 'object' && result.status === 'failed') {
+        throw new Error(result.message || 'ARK Connect failed')
+      }
       
       let address = ''
       let publicKey = ''
       
       if (typeof result === 'string') {
         address = result
-      } else if (result?.address) {
-        address = result.address
-        publicKey = result.publicKey || ''
+      } else if (result && typeof result === 'object') {
+        // Try multiple possible property names
+        address = result.address || result.walletAddress || result.account || result.wallet || ''
+        publicKey = result.publicKey || result.pubKey || result.public_key || ''
+        
+        // Log what we found
+        console.log('Extracted address:', address)
+        console.log('Extracted publicKey:', publicKey)
+        
+        // If still no address, check all properties
+        if (!address) {
+          console.log('No address found, checking all properties:')
+          Object.entries(result).forEach(([key, value]) => {
+            console.log(`  ${key}:`, value, `(type: ${typeof value})`)
+            // Look for string values that could be addresses (ARK addresses are typically 34 characters)
+            if (typeof value === 'string' && value.length >= 30 && value.length <= 40) {
+              console.log(`  Potential address found in ${key}:`, value)
+              if (!address) address = value
+            }
+          })
+        }
       }
       
       if (!address) {
-        throw new Error('No wallet address received from ARK Connect')
+        const resultInfo = result ? JSON.stringify(result) : 'null'
+        throw new Error(`No wallet address found in ARK Connect response: ${resultInfo}`)
       }
       
       // Get initial balance from ARK Connect
