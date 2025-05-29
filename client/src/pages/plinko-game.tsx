@@ -297,7 +297,7 @@ function PlinkoCanvas({
   )
 }
 
-// ARK Connect with domain reset functionality
+// ARK Connect with proper API handling
 function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
   onWalletConnected: (wallet: ArkWallet) => void
   onDisconnect: () => void
@@ -309,19 +309,10 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
     if (typeof window !== 'undefined' && window.arkconnect) {
       try {
         console.log('Checking for existing ARK Connect connection...')
-        const account = await window.arkconnect.getAccount()
+        console.log('Available ARK Connect methods:', Object.keys(window.arkconnect))
         
-        if (account && account.address) {
-          console.log('Found existing connection:', account.address)
-          const balance = await window.arkconnect.getBalance(account.address)
-          onWalletConnected({
-            address: account.address,
-            publicKey: account.publicKey || '',
-            balance: (parseFloat(balance) / 100000000).toString()
-          })
-        } else {
-          console.log('No existing connection found')
-        }
+        // Skip automatic connection check - let user manually connect
+        console.log('Skipping automatic connection check')
       } catch (error) {
         console.log('Connection check failed:', error)
       }
@@ -336,47 +327,84 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
     return () => clearTimeout(timer)
   }, [])
 
-  const resetAndConnect = async () => {
-    console.log('Resetting domain connection and connecting...')
+  const connectWallet = async () => {
+    console.log('Attempting to connect ARK wallet...')
+    
+    if (!window.arkconnect) {
+      console.error('ARK Connect extension not found')
+      showNotification('Please install the ARK Connect browser extension to play ARKlinko.', 'error')
+      return
+    }
+
     setIsConnecting(true)
     
     try {
       // First try to disconnect to clear any existing connection
-      if (window.arkconnect && window.arkconnect.disconnect) {
+      if (window.arkconnect.disconnect) {
         try {
           await window.arkconnect.disconnect()
           console.log('Disconnected existing connection')
-          // Wait a moment for the disconnect to process
           await new Promise(resolve => setTimeout(resolve, 500))
         } catch (disconnectError) {
           console.log('Disconnect not needed or failed:', disconnectError)
         }
       }
       
-      // Now try to connect fresh
       console.log('Attempting fresh connection...')
-      const account = await window.arkconnect.connect()
-      console.log('Connect successful:', account)
+      const result = await window.arkconnect.connect()
+      console.log('Connect result:', result)
+      console.log('Result type:', typeof result)
+      console.log('Result keys:', result ? Object.keys(result) : 'null')
       
-      if (!account || !account.address) {
-        throw new Error('No account returned from ARK Connect')
+      // Handle different possible return structures
+      let address = ''
+      let publicKey = ''
+      
+      if (result) {
+        // Try different possible property names and structures
+        if (typeof result === 'string') {
+          address = result
+        } else if (typeof result === 'object') {
+          address = result.address || result.walletAddress || result.account || result.wallet || ''
+          publicKey = result.publicKey || result.pubKey || result.public_key || result.pk || ''
+          
+          // Check nested objects
+          if (!address && result.wallet) {
+            address = result.wallet.address || result.wallet
+          }
+          if (!address && result.account) {
+            address = result.account.address || result.account
+          }
+          
+          console.log('Extracted address:', address)
+          console.log('Extracted publicKey:', publicKey)
+        }
       }
       
-      console.log('Getting balance for:', account.address)
-      const balance = await window.arkconnect.getBalance(account.address)
-      console.log('Balance received:', balance)
+      if (!address) {
+        console.error('No address found in result:', result)
+        throw new Error('Unable to get wallet address from ARK Connect. Please try again.')
+      }
+      
+      console.log('Getting balance for address:', address)
+      const balanceResult = await window.arkconnect.getBalance(address)
+      console.log('Balance result:', balanceResult)
+      
+      const balanceInArk = (parseFloat(balanceResult) / 100000000).toString()
       
       const wallet: ArkWallet = {
-        address: account.address,
-        publicKey: account.publicKey || '',
-        balance: (parseFloat(balance) / 100000000).toString()
+        address: address,
+        publicKey: publicKey,
+        balance: balanceInArk
       }
       
+      console.log('Final wallet object:', wallet)
       onWalletConnected(wallet)
-      showNotification(`Connected to ${account.address.substring(0, 10)}...`)
+      showNotification(`Connected to ${address.substring(0, 10)}...`)
+      
     } catch (error: any) {
       console.error('ARK Connect error:', error)
-      showNotification(`Connection failed: ${error.message || 'Unknown error'}. Try refreshing the page.`, 'error')
+      showNotification(`Connection failed: ${error.message || 'Unknown error'}. Please try again.`, 'error')
     } finally {
       setIsConnecting(false)
     }
@@ -435,7 +463,7 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
         Connect your ARK wallet to play ARKlinko with real cryptocurrency
       </p>
       <button
-        onClick={resetAndConnect}
+        onClick={connectWallet}
         disabled={isConnecting}
         style={{ 
           padding: '12px 24px', 
@@ -698,9 +726,8 @@ export default function ARKlinko() {
 declare global {
   interface Window {
     arkconnect?: {
-      connect: () => Promise<{ address: string; publicKey: string }>;
+      connect: () => Promise<any>;
       disconnect: () => Promise<void>;
-      getAccount: () => Promise<{ address: string; publicKey: string } | null>;
       getBalance: (address: string) => Promise<string>;
       isConnected: () => boolean;
       request: (method: string, params?: any) => Promise<any>;
