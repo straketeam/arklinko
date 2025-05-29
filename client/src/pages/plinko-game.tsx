@@ -297,7 +297,7 @@ function PlinkoCanvas({
   )
 }
 
-// ARK Connect with proper API handling
+// ARK Connect with detailed debugging
 function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
   onWalletConnected: (wallet: ArkWallet) => void
   onDisconnect: () => void
@@ -310,8 +310,6 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
       try {
         console.log('Checking for existing ARK Connect connection...')
         console.log('Available ARK Connect methods:', Object.keys(window.arkconnect))
-        
-        // Skip automatic connection check - let user manually connect
         console.log('Skipping automatic connection check')
       } catch (error) {
         console.log('Connection check failed:', error)
@@ -339,72 +337,72 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
     setIsConnecting(true)
     
     try {
-      // First try to disconnect to clear any existing connection
-      if (window.arkconnect.disconnect) {
-        try {
-          await window.arkconnect.disconnect()
-          console.log('Disconnected existing connection')
-          await new Promise(resolve => setTimeout(resolve, 500))
-        } catch (disconnectError) {
-          console.log('Disconnect not needed or failed:', disconnectError)
-        }
-      }
-      
       console.log('Attempting fresh connection...')
       const result = await window.arkconnect.connect()
       console.log('Connect result:', result)
       console.log('Result type:', typeof result)
-      console.log('Result keys:', result ? Object.keys(result) : 'null')
       
-      // Handle different possible return structures
-      let address = ''
-      let publicKey = ''
-      
-      if (result) {
-        // Try different possible property names and structures
-        if (typeof result === 'string') {
-          address = result
-        } else if (typeof result === 'object') {
-          address = result.address || result.walletAddress || result.account || result.wallet || ''
-          publicKey = result.publicKey || result.pubKey || result.public_key || result.pk || ''
+      // Detailed logging of the actual response structure
+      if (result && typeof result === 'object') {
+        console.log('Result keys:', Object.keys(result))
+        
+        // Log each property name and value
+        Object.keys(result).forEach(key => {
+          console.log(`Property "${key}":`, result[key], `(type: ${typeof result[key]})`)
+        })
+        
+        // Try to extract address from any reasonable property
+        let address = ''
+        let publicKey = ''
+        
+        // Check all properties for potential address values
+        for (const [key, value] of Object.entries(result)) {
+          console.log(`Checking property "${key}" with value:`, value)
           
-          // Check nested objects
-          if (!address && result.wallet) {
-            address = result.wallet.address || result.wallet
-          }
-          if (!address && result.account) {
-            address = result.account.address || result.account
+          if (typeof value === 'string' && value.length > 20 && value.length < 50) {
+            // Looks like it could be an address
+            console.log(`Potential address found in property "${key}":`, value)
+            if (!address) address = value
           }
           
-          console.log('Extracted address:', address)
-          console.log('Extracted publicKey:', publicKey)
+          if (key.toLowerCase().includes('public') && typeof value === 'string') {
+            console.log(`Potential public key found in property "${key}":`, value)
+            publicKey = value
+          }
         }
+        
+        console.log('Final extracted address:', address)
+        console.log('Final extracted publicKey:', publicKey)
+        
+        if (!address) {
+          // Show the user what we found to help debug
+          const properties = Object.keys(result).map(key => `${key}: ${result[key]}`).join(', ')
+          throw new Error(`Cannot find wallet address. Found properties: ${properties}`)
+        }
+        
+        console.log('Getting balance for address:', address)
+        const balanceResult = await window.arkconnect.getBalance(address)
+        console.log('Balance result:', balanceResult)
+        
+        const balanceInArk = (parseFloat(balanceResult) / 100000000).toString()
+        
+        const wallet: ArkWallet = {
+          address: address,
+          publicKey: publicKey,
+          balance: balanceInArk
+        }
+        
+        console.log('Final wallet object:', wallet)
+        onWalletConnected(wallet)
+        showNotification(`Connected to ${address.substring(0, 10)}...`)
+        
+      } else {
+        throw new Error(`Unexpected result type: ${typeof result}`)
       }
-      
-      if (!address) {
-        console.error('No address found in result:', result)
-        throw new Error('Unable to get wallet address from ARK Connect. Please try again.')
-      }
-      
-      console.log('Getting balance for address:', address)
-      const balanceResult = await window.arkconnect.getBalance(address)
-      console.log('Balance result:', balanceResult)
-      
-      const balanceInArk = (parseFloat(balanceResult) / 100000000).toString()
-      
-      const wallet: ArkWallet = {
-        address: address,
-        publicKey: publicKey,
-        balance: balanceInArk
-      }
-      
-      console.log('Final wallet object:', wallet)
-      onWalletConnected(wallet)
-      showNotification(`Connected to ${address.substring(0, 10)}...`)
       
     } catch (error: any) {
       console.error('ARK Connect error:', error)
-      showNotification(`Connection failed: ${error.message || 'Unknown error'}. Please try again.`, 'error')
+      showNotification(`Connection failed: ${error.message || 'Unknown error'}. Check console for details.`, 'error')
     } finally {
       setIsConnecting(false)
     }
