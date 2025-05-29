@@ -1,8 +1,3 @@
-# Simple Test Version
-
-Replace your `src/App.tsx` with this minimal test version:
-
-```tsx
 import React, { useState, useEffect } from 'react'
 
 function App() {
@@ -56,11 +51,3 @@ function App() {
 }
 
 export default App
-```
-
-This simple version will clearly show:
-1. That the new code is running (you'll see "NEW VERSION LOADED")
-2. All available methods on the ARK Connect object
-3. Any wallet-related properties
-
-Update your GitHub with this simple test version and let me know what it shows!
