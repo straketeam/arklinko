@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import arkLogo from "@assets/Logo_ARK.io.png"
 
 interface ArkWallet {
   address: string
@@ -486,11 +485,9 @@ function App() {
         <div className="bg-gray-800 p-8 rounded-lg border border-gray-700 max-w-md w-full">
           <div className="text-center mb-6">
             <div className="flex items-center justify-center gap-4 mb-4">
-              <img 
-                src={arkLogo} 
-                alt="ARK Logo" 
-                className="w-12 h-12 object-contain"
-              />
+              <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-xl">A</span>
+              </div>
               <h1 className="text-4xl font-bold text-white">ARKlinko</h1>
             </div>
             <p className="text-gray-300">Connect your ARK wallet to play</p>
@@ -529,11 +526,9 @@ function App() {
         {/* Header with ARK Logo */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-6 mb-6">
-            <img 
-              src={arkLogo} 
-              alt="ARK Logo" 
-              className="w-20 h-20 object-contain"
-            />
+            <div className="w-20 h-20 bg-red-500 rounded-xl flex items-center justify-center shadow-2xl">
+              <span className="text-white font-bold text-3xl">A</span>
+            </div>
             <h1 className="text-6xl font-bold bg-gradient-to-r from-red-400 via-red-500 to-red-600 bg-clip-text text-transparent">
               ARKlinko
             </h1>
