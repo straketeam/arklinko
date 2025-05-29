@@ -26,22 +26,29 @@ function App() {
       if (arkProvider) {
         addDebugInfo('ARK Connect detected!')
         
-        // Check if already connected
+        // Check if already connected and try to get account
         if (arkProvider.isConnected && arkProvider.isConnected()) {
-          addDebugInfo('ARK Connect shows as connected')
-          // Try to get existing account
-          arkProvider.getAccount?.().then((account: any) => {
-            if (account && account.address) {
-              addDebugInfo(`Auto-connected to: ${account.address}`)
-              setWallet({
-                address: account.address,
-                balance: '0.00000000',
-                publicKey: account.publicKey || ''
-              })
-            }
-          }).catch((err: any) => {
-            addDebugInfo(`Auto-connect failed: ${err.message || 'Unknown error'}`)
-          })
+          addDebugInfo('ARK Connect shows as connected, attempting to get account...')
+          
+          // Try to get the account directly
+          if (arkProvider.getAccount) {
+            arkProvider.getAccount().then((account: any) => {
+              if (account && account.address) {
+                addDebugInfo(`Auto-connected to: ${account.address}`)
+                setWallet({
+                  address: account.address,
+                  balance: '0.00000000',
+                  publicKey: account.publicKey || ''
+                })
+              } else {
+                addDebugInfo('getAccount returned null/undefined')
+              }
+            }).catch((err: any) => {
+              addDebugInfo(`getAccount failed: ${err.message || 'Unknown error'}`)
+            })
+          } else {
+            addDebugInfo('getAccount method not available')
+          }
         }
       } else {
         addDebugInfo('ARK Connect not found in window object')
@@ -77,42 +84,82 @@ function App() {
       }
       
       if (!arkProvider) {
-        // Wait and try again
-        addDebugInfo('No provider found, waiting for extension to load...')
-        await new Promise(resolve => setTimeout(resolve, 3000))
-        
-        // Try again
-        for (let i = 0; i < providers.length; i++) {
-          if (providers[i]) {
-            addDebugInfo(`Found provider at index ${i} on second attempt`)
-            arkProvider = providers[i]
-            break
-          }
-        }
-      }
-      
-      if (!arkProvider) {
         throw new Error('ARK Connect extension not found. Please install from arkconnect.io and refresh the page.')
       }
       
+      // Try to get account first (if already connected)
+      if (arkProvider.getAccount) {
+        try {
+          addDebugInfo('Trying getAccount first...')
+          const account = await arkProvider.getAccount()
+          if (account && account.address) {
+            addDebugInfo(`getAccount successful: ${account.address}`)
+            setWallet({
+              address: account.address,
+              balance: '0.00000000',
+              publicKey: account.publicKey || ''
+            })
+            return // Success!
+          } else {
+            addDebugInfo('getAccount returned no account')
+          }
+        } catch (getAccountErr: any) {
+          addDebugInfo(`getAccount failed: ${getAccountErr.message}`)
+        }
+      }
+      
+      // If getAccount didn't work, try connect()
       if (!arkProvider.connect || typeof arkProvider.connect !== 'function') {
         throw new Error('ARK Connect extension found but connect method not available.')
       }
       
       addDebugInfo('Calling arkProvider.connect()...')
-      const account = await arkProvider.connect()
-      addDebugInfo(`Connect returned: ${JSON.stringify(account)}`)
       
-      if (account && account.address) {
-        addDebugInfo(`Successfully connected: ${account.address}`)
-        setWallet({
-          address: account.address,
-          balance: '0.00000000',
-          publicKey: account.publicKey || ''
-        })
-      } else {
-        throw new Error('No account returned from ARK Connect')
+      try {
+        const account = await arkProvider.connect()
+        addDebugInfo(`Connect returned: ${JSON.stringify(account)}`)
+        
+        if (account && account.address) {
+          addDebugInfo(`Successfully connected: ${account.address}`)
+          setWallet({
+            address: account.address,
+            balance: '0.00000000',
+            publicKey: account.publicKey || ''
+          })
+        } else {
+          throw new Error('No account returned from ARK Connect')
+        }
+      } catch (connectErr: any) {
+        addDebugInfo(`Connect method failed: ${connectErr.message}`)
+        
+        // Handle "already connected" error specifically
+        if (connectErr.message && connectErr.message.includes('already connected')) {
+          addDebugInfo('Domain already connected - trying alternative methods...')
+          
+          // Try to get account info despite the "already connected" error
+          if (arkProvider.getAccount) {
+            try {
+              const account = await arkProvider.getAccount()
+              if (account && account.address) {
+                addDebugInfo(`Retrieved account after "already connected" error: ${account.address}`)
+                setWallet({
+                  address: account.address,
+                  balance: '0.00000000',
+                  publicKey: account.publicKey || ''
+                })
+                return // Success!
+              }
+            } catch (retryErr: any) {
+              addDebugInfo(`Retry getAccount failed: ${retryErr.message}`)
+            }
+          }
+          
+          throw new Error('ARK Connect is connected but unable to retrieve wallet information. Try refreshing the page or disconnecting/reconnecting the extension.')
+        } else {
+          throw connectErr // Re-throw other errors
+        }
       }
+      
     } catch (err: any) {
       const errorMessage = err.message || 'Unknown connection error'
       addDebugInfo(`Connection failed: ${errorMessage}`)
@@ -184,7 +231,8 @@ function App() {
         
         <div className="text-center">
           <p className="text-xl text-green-400">ARK Connect Working!</p>
-          <p className="text-gray-400">Full Plinko game features coming next...</p>
+          <p className="text-gray-400">Your wallet is connected and ready to play</p>
+          <p className="text-sm text-gray-500 mt-4">Full Plinko game features coming next...</p>
         </div>
       </div>
     </div>
