@@ -22,3 +22,9 @@
     "postcss": "^8.4.49"
   }
 }
+{
+  "dependencies": {
+    "elliptic": "^6.5.4",
+    "bs58check": "^2.1.2"
+  }
+}
