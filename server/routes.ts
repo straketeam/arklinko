@@ -1,8 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import crypto from "crypto";
-import { storage } from "./storage";
-import { insertUserSchema, insertGameSchema, insertTransactionSchema, insertSeedSchema } from "@shared/schema";
 
 // Provably Fair Game Logic
 function generateGameResult(serverSeed: string, clientSeed: string, nonce: number): number {
