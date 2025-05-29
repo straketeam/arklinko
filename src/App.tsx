@@ -14,7 +14,7 @@ function App() {
     let attempts = 0
     const maxAttempts = 10
     
-    const checkForArkConnect = () => {
+    const checkForArkConnect = async () => {
       attempts++
       addDebugInfo(`Checking for ARK Connect (attempt ${attempts}/${maxAttempts})...`)
       
@@ -23,17 +23,35 @@ function App() {
       if (arkProvider) {
         addDebugInfo(`ARK Connect found on attempt ${attempts}!`)
         addDebugInfo(`Available methods: ${Object.keys(arkProvider).join(', ')}`)
-        addDebugInfo(`Available properties: ${Object.getOwnPropertyNames(arkProvider).join(', ')}`)
         
+        // Check if isConnected is a promise
         if (arkProvider.isConnected) {
-          const connected = arkProvider.isConnected()
-          addDebugInfo(`isConnected(): ${connected}`)
+          try {
+            const connected = await arkProvider.isConnected()
+            addDebugInfo(`isConnected() result: ${connected}`)
+          } catch (err: any) {
+            addDebugInfo(`isConnected() error: ${err.message}`)
+          }
         }
         
-        const walletPaths = ['wallet', 'account', 'connectedAccount', 'activeAccount', 'currentAccount']
-        walletPaths.forEach(path => {
-          if (arkProvider[path]) {
-            addDebugInfo(`${path}: ${JSON.stringify(arkProvider[path])}`)
+        // Check for connect method
+        if (arkProvider.connect) {
+          addDebugInfo('connect method found, attempting connection...')
+          try {
+            const result = await arkProvider.connect()
+            addDebugInfo(`connect() result: ${JSON.stringify(result)}`)
+          } catch (err: any) {
+            addDebugInfo(`connect() error: ${err.message}`)
+          }
+        }
+        
+        // Check all properties and methods more thoroughly
+        Object.keys(arkProvider).forEach(key => {
+          const value = arkProvider[key]
+          if (typeof value === 'function') {
+            addDebugInfo(`Method: ${key}`)
+          } else {
+            addDebugInfo(`Property ${key}: ${JSON.stringify(value)}`)
           }
         })
         
@@ -53,7 +71,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
-      <h1 className="text-3xl font-bold mb-6">ARK Connect Test</h1>
+      <h1 className="text-3xl font-bold mb-6">ARK Connect Enhanced Test</h1>
       <div className="bg-gray-800 p-4 rounded-lg">
         <h2 className="text-xl mb-4">Debug Information:</h2>
         <div className="space-y-2 max-h-96 overflow-y-auto">
