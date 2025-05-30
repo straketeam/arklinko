@@ -110,14 +110,12 @@ const sendArkTransaction = async (
 
     // Convert ARK amount to arktoshi (ARK uses 8 decimal places)
     const amountInArktoshi = Math.floor(amount * 100000000)
-    const feeInArktoshi = Math.floor(ARK_TRANSACTION_FEE * 100000000)
 
-    // Create transaction request
+    // Create transaction request according to ARK Connect API
     const transactionRequest = {
-      type: 0, // Transfer transaction
-      amount: amountInArktoshi.toString(),
-      fee: feeInArktoshi.toString(),
+      type: 'transfer',
       recipientId: toAddress,
+      amount: amountInArktoshi,
       vendorField: `ARKlinko game ${amount} ARK`
     }
 
@@ -126,18 +124,20 @@ const sendArkTransaction = async (
     // Sign and broadcast transaction using ARK Connect
     const result = await window.arkconnect.signTransaction(transactionRequest)
     
-    if (result && result.transactionId) {
-      console.log('Transaction sent:', result.transactionId)
-      return result.transactionId
+    if (result && result.status === 'success' && result.data && result.data.id) {
+      console.log('Transaction sent:', result.data.id)
+      return result.data.id
     }
     
-    throw new Error('Transaction failed')
+    throw new Error('Transaction failed or was rejected')
   } catch (error: any) {
     console.error('Transaction error:', error)
     showNotification(`Transaction failed: ${error.message}`, 'error')
     return null
   }
 }
+
+// ... rest of the component code remains the same as before ...
 
 function PlinkoCanvas({ 
   onBallLanded, 
