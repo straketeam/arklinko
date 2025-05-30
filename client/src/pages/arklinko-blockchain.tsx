@@ -34,7 +34,7 @@ interface GameResult {
 // Game constants
 const MIN_BET = 0.0001
 const MAX_BET = 5
-const ARK_TRANSACTION_FEE = 0.006 // Standard ARK transaction fee
+const ARK_TRANSACTION_FEE = 0.006
 
 // Physics constants
 const BALL_RADIUS = 10
@@ -46,10 +46,9 @@ const HORIZONTAL_DAMPING = 0.98
 // Plinko multipliers
 const MULTIPLIERS = [10, 5, 4, 3, 2, -0.5, 1.5, 1.25, 0, -1, 0, 1.25, 1.5, -0.5, 2, 3, 4, 5, 10]
 
-// Game wallet address (where losses are sent)
+// Game wallet address
 const GAME_WALLET_ADDRESS = "AdEKeaC8sBm24RHwnPvZfEWUiCPB4Z2xZp"
 
-// Simple notification function
 function showNotification(message: string, type: 'success' | 'error' = 'success') {
   const notification = document.createElement('div')
   notification.style.cssText = `
@@ -73,24 +72,17 @@ function showNotification(message: string, type: 'success' | 'error' = 'success'
   }, 3000)
 }
 
-// ARK Blockchain API functions
 const getArkBalance = async (address: string): Promise<string> => {
   try {
-    console.log('Fetching balance from ARK Mainnet API for:', address)
-    
     const response = await fetch(`https://wallets.ark.io/api/wallets/${address}`)
-    
     if (!response.ok) {
       throw new Error(`API request failed: ${response.status}`)
     }
-    
     const data = await response.json()
-    
     if (data.data && data.data.balance) {
       const balance = (parseInt(data.data.balance) / 100000000).toString()
       return balance
     }
-    
     return '0'
   } catch (error) {
     console.error('Error fetching balance:', error)
@@ -98,15 +90,11 @@ const getArkBalance = async (address: string): Promise<string> => {
   }
 }
 
-// Send ARK from game wallet to player (for wins) - REAL TRANSACTIONS
 const sendWinningTransaction = async (
   toAddress: string,
   amount: number
 ): Promise<string | null> => {
   try {
-    console.log('Sending real winning transaction to:', toAddress, 'Amount:', amount)
-    
-    // Call backend API to send real winning transaction using game wallet private key
     const response = await fetch('/api/game/send-winnings', {
       method: 'POST',
       headers: {
@@ -125,7 +113,6 @@ const sendWinningTransaction = async (
     const result = await response.json()
     
     if (result.success && result.transactionId) {
-      console.log('Real winning transaction sent:', result.transactionId)
       return result.transactionId
     }
     
@@ -146,25 +133,16 @@ const sendArkTransaction = async (
       throw new Error('ARK Connect not available')
     }
 
-    // Convert ARK amount to arktoshi (ARK uses 8 decimal places)
     const amountInArktoshi = Math.floor(amount * 100000000)
-
-    // Create transaction request according to ARK Connect specifications
     const transactionRequest = {
       amount: amountInArktoshi,
       recipientId: toAddress,
       vendorField: `ARKlinko game ${amount} ARK`
     }
 
-    console.log('Sending transaction:', transactionRequest)
-
-    // Use request method with 'signTransaction' command
     const result = await window.arkconnect.request('signTransaction', transactionRequest)
     
-    console.log('Transaction result:', result)
-    
     if (result && result.id) {
-      console.log('Transaction sent:', result.id)
       return result.id
     }
     
@@ -191,7 +169,6 @@ function PlinkoCanvas({
   const animationRef = useRef<number>()
   const ballIdRef = useRef(0)
 
-  // Initialize pegs
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -232,7 +209,6 @@ function PlinkoCanvas({
     pegsRef.current = pegs
   }, [])
 
-  // Drop ball when triggered
   useEffect(() => {
     if (triggerDrop) {
       dropBall()
@@ -284,7 +260,6 @@ function PlinkoCanvas({
     }
   }
 
-  // Animation loop
   const animate = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -294,7 +269,6 @@ function PlinkoCanvas({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    // Draw pegs
     ctx.fillStyle = '#64748b'
     pegsRef.current.forEach(peg => {
       ctx.beginPath()
@@ -302,7 +276,6 @@ function PlinkoCanvas({
       ctx.fill()
     })
 
-    // Draw multiplier boxes
     const boxWidth = canvas.width / MULTIPLIERS.length
     const boxHeight = 80
     const boxY = canvas.height - boxHeight
@@ -345,7 +318,6 @@ function PlinkoCanvas({
       ctx.fillText(displayText, x + boxWidth / 2, boxY + boxHeight / 2)
     })
 
-    // Update and draw balls
     ballsRef.current = ballsRef.current.filter(ball => {
       if (!ball.active) return false
 
@@ -413,7 +385,6 @@ function PlinkoCanvas({
   )
 }
 
-// ARK Connect Component
 function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanceUpdate }: {
   onWalletConnected: (wallet: ArkWallet) => void
   onDisconnect: () => void
@@ -431,12 +402,8 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
     setIsConnecting(true)
     
     try {
-      console.log('Connecting to ARK Connect...')
-      
       const isConnected = await window.arkconnect.isConnected()
-      
       let address = ''
-      
       let publicKey = ''
       
       if (isConnected) {
@@ -454,7 +421,6 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
         throw new Error('Could not get wallet address')
       }
       
-      // Try to get public key for transactions
       try {
         const accountInfo = await window.arkconnect.request('getAccount')
         if (accountInfo && accountInfo.publicKey) {
@@ -464,7 +430,6 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
         console.log('Could not get public key, will proceed without it')
       }
       
-      // Get balance from blockchain
       const balance = await getArkBalance(address)
       
       const wallet: ArkWallet = {
@@ -578,7 +543,6 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
   )
 }
 
-// Main ARKlinko Game Component
 export default function ARKlinkoBlockchain() {
   const [wallet, setWallet] = useState<ArkWallet | null>(null)
   const [betAmount, setBetAmount] = useState('')
@@ -587,7 +551,6 @@ export default function ARKlinkoBlockchain() {
   const [gameHistory, setGameHistory] = useState<GameResult[]>([])
 
   const handleWalletConnected = (connectedWallet: ArkWallet) => {
-    console.log('Wallet connected:', connectedWallet.address, 'Balance:', connectedWallet.balance)
     setWallet(connectedWallet)
   }
 
@@ -598,7 +561,6 @@ export default function ARKlinkoBlockchain() {
   }
 
   const handleDisconnect = () => {
-    console.log('Wallet disconnected')
     setWallet(null)
     setBetAmount('')
     setGameHistory([])
@@ -609,12 +571,10 @@ export default function ARKlinkoBlockchain() {
     let transactionId: string | null = null
     
     try {
-      // Calculate game result
       let payout = 0
       let isWin = false
 
       if (multiplier === -1) {
-        // Total loss - player sends bet to game wallet
         payout = 0
         isWin = false
         
@@ -626,7 +586,6 @@ export default function ARKlinkoBlockchain() {
           }
         }
       } else if (multiplier === -0.5) {
-        // Half loss - player sends half bet to game wallet
         const lossAmount = bet * 0.5
         payout = bet * 0.5
         isWin = false
@@ -639,12 +598,10 @@ export default function ARKlinkoBlockchain() {
           }
         }
       } else if (multiplier === 0) {
-        // Break even - no transaction needed
         payout = bet
         isWin = true
         showNotification(`Break even! You keep your ${bet} ARK`)
       } else if (multiplier > 0) {
-        // Win - game wallet sends winnings to player
         payout = bet * multiplier
         isWin = true
         
@@ -659,7 +616,6 @@ export default function ARKlinkoBlockchain() {
         }
       }
 
-      // Add to game history with transaction ID
       const gameResult: GameResult = {
         betAmount: bet,
         multiplier,
@@ -671,13 +627,12 @@ export default function ARKlinkoBlockchain() {
       
       setGameHistory(prev => [gameResult, ...prev.slice(0, 9)])
       
-      // Refresh balance after blockchain confirmation delay
       setTimeout(async () => {
         if (wallet) {
           const newBalance = await getArkBalance(wallet.address)
           handleBalanceUpdate(newBalance)
         }
-      }, 3000) // 3 second delay for blockchain confirmation
+      }, 3000)
       
     } catch (error: any) {
       showNotification(`Game Error: ${error.message}`, 'error')
@@ -690,7 +645,7 @@ export default function ARKlinkoBlockchain() {
     setTriggerDrop(false)
   }
 
-  const handlePlayGame = () => {
+  const playGame = () => {
     if (!wallet) {
       showNotification('Please connect your ARK wallet first', 'error')
       return
@@ -704,10 +659,8 @@ export default function ARKlinkoBlockchain() {
       return
     }
     
-    // Check if player has enough balance including transaction fee
-    const totalRequired = bet + ARK_TRANSACTION_FEE
-    if (totalRequired > balance) {
-      showNotification(`Not enough ARK. Need ${totalRequired.toFixed(4)} ARK (${bet} bet + ${ARK_TRANSACTION_FEE} fee)`, 'error')
+    if (balance < bet) {
+      showNotification('Insufficient ARK balance', 'error')
       return
     }
     
@@ -716,58 +669,164 @@ export default function ARKlinkoBlockchain() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#111827', color: 'white' }}>
-      {/* Header */}
-      <div style={{ backgroundColor: '#1f2937', borderBottom: '1px solid #374151' }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ 
-                width: '48px', 
-                height: '48px', 
-                backgroundColor: '#dc2626', 
-                borderRadius: '8px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center' 
-              }}>
-                <span style={{ fontSize: '24px', fontWeight: 'bold' }}>A</span>
-              </div>
-              <div>
-                <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0' }}>ARKlinko</h1>
-                <p style={{ color: '#9ca3af', margin: '0', fontSize: '14px' }}>
-                  Provably fair Plinko on ARK blockchain
-                </p>
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: '#111827', 
+      color: 'white', 
+      padding: '24px' 
+    }}>
+      <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '48px', fontWeight: 'bold', marginBottom: '8px' }}>
+            ARKlinko
+          </h1>
+          <p style={{ fontSize: '20px', color: '#9ca3af' }}>
+            Real ARK Blockchain Plinko Game
+          </p>
+        </div>
+
+        <ArkConnect 
+          onWalletConnected={handleWalletConnected}
+          onDisconnect={handleDisconnect}
+          connectedWallet={wallet}
+          onBalanceUpdate={handleBalanceUpdate}
+        />
+
+        {wallet ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '32px' }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center',
+              backgroundColor: '#1f2937',
+              padding: '24px',
+              borderRadius: '8px'
+            }}>
+              <PlinkoCanvas 
+                onBallLanded={handleBallLanded}
+                triggerDrop={triggerDrop}
+                onTriggerComplete={handleTriggerComplete}
+              />
+            </div>
+
+            <div style={{ backgroundColor: '#1f2937', borderRadius: '8px', padding: '24px' }}>
+              <div style={{ display: 'flex', gap: '24px', alignItems: 'end', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', color: '#9ca3af', marginBottom: '8px' }}>
+                    Bet Amount (ARK)
+                  </label>
+                  <input
+                    type="number"
+                    value={betAmount}
+                    onChange={(e) => setBetAmount(e.target.value)}
+                    min={MIN_BET}
+                    max={MAX_BET}
+                    step={MIN_BET}
+                    placeholder={`Min: ${MIN_BET}`}
+                    disabled={gameState === 'playing'}
+                    style={{ 
+                      width: '128px', 
+                      padding: '8px 12px', 
+                      backgroundColor: '#374151', 
+                      border: '1px solid #4b5563', 
+                      borderRadius: '4px', 
+                      color: 'white' 
+                    }}
+                  />
+                </div>
+                
+                <button
+                  onClick={playGame}
+                  disabled={gameState === 'playing' || !betAmount}
+                  style={{ 
+                    padding: '12px 32px', 
+                    backgroundColor: '#dc2626', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: '8px', 
+                    fontWeight: 'bold',
+                    cursor: (gameState === 'playing' || !betAmount) ? 'not-allowed' : 'pointer',
+                    opacity: (gameState === 'playing' || !betAmount) ? 0.5 : 1
+                  }}
+                >
+                  {gameState === 'playing' ? 'Ball Dropping...' : 'DROP BALL'}
+                </button>
+                
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 4px 0' }}>Wallet Balance</p>
+                  <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#22c55e', margin: '0' }}>
+                    {wallet.balance} ARK
+                  </p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>
+                    Tx Fee: {ARK_TRANSACTION_FEE} ARK
+                  </p>
+                </div>
               </div>
             </div>
-            <ArkConnect 
-              onWalletConnected={handleWalletConnected}
-              onDisconnect={handleDisconnect}
-              connectedWallet={wallet}
-              onBalanceUpdate={handleBalanceUpdate}
-            />
-          </div>
-        </div>
-      </div>
 
-      {/* Game Area */}
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Plinko Game */}
+            {gameHistory.length > 0 && (
+              <div style={{ backgroundColor: '#1f2937', padding: '24px', borderRadius: '8px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>Recent Games</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {gameHistory.map((game, index) => (
+                    <div key={index} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      padding: '12px', 
+                      backgroundColor: '#374151', 
+                      borderRadius: '4px' 
+                    }}>
+                      <span>Bet: {game.betAmount} ARK | {game.multiplier}x</span>
+                      <span style={{ color: game.isWin ? '#22c55e' : '#ef4444' }}>
+                        {game.isWin ? `Won ${game.payout.toFixed(4)} ARK` : 
+                         game.multiplier === 0 ? 'Break Even' :
+                         `Lost ${(game.betAmount - game.payout).toFixed(4)} ARK`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
           <div style={{ 
             backgroundColor: '#1f2937', 
+            padding: '48px', 
             borderRadius: '8px', 
-            padding: '24px',
-            display: 'flex',
-            justifyContent: 'center'
+            textAlign: 'center',
+            marginTop: '32px'
           }}>
-            <PlinkoCanvas
-              onBallLanded={handleBallLanded}
-              triggerDrop={triggerDrop}
-              onTriggerComplete={handleTriggerComplete}
-            />
+            <h2 style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '16px' }}>
+              Welcome to ARKlinko!
+            </h2>
+            <p style={{ fontSize: '18px', color: '#9ca3af', marginBottom: '32px' }}>
+              Connect your ARK wallet to start playing with real ARK blockchain transactions.
+            </p>
+            <div style={{ color: '#6b7280', fontSize: '14px' }}>
+              <p>• Minimum bet: {MIN_BET} ARK • Maximum bet: {MAX_BET} ARK</p>
+              <p>• Transaction fee: {ARK_TRANSACTION_FEE} ARK per transaction</p>
+              <p>• Blocktime: ~8 seconds for confirmation</p>
+            </div>
           </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
-          {/* Game Controls */}
-          <div style={{ backgroundColor: '#1f2937', borderRadius: '8px', padding: '24px' }}>
-            <div style={{ display: 'flex', gap: '24px', alignItems: 'end', flexW
+declare global {
+  interface Window {
+    arkconnect?: {
+      connect: () => Promise<any>;
+      disconnect: () => Promise<void>;
+      getAddress: () => Promise<string>;
+      getBalance: () => Promise<string>;
+      isConnected: () => Promise<boolean>;
+      getNetwork: () => Promise<string>;
+      signTransaction: (request: any) => Promise<any>;
+      signMessage: (request: any) => Promise<any>;
+      request: (method: string, params?: any) => Promise<any>;
+      version: () => string;
+    };
+  }
+}
