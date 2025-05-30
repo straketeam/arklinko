@@ -351,10 +351,20 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
       } else {
         const data = await response.json()
         console.log('Primary API response:', data)
+        console.log('Full API response structure:', JSON.stringify(data, null, 2))
         
+        // Check multiple possible balance locations in the response
         if (data.balance) {
           const balance = (parseInt(data.balance) / 100000000).toString()
-          console.log('Primary API balance:', balance)
+          console.log('Primary API balance from data.balance:', balance)
+          return balance
+        } else if (data.data && data.data.balance) {
+          const balance = (parseInt(data.data.balance) / 100000000).toString()
+          console.log('Primary API balance from data.data.balance:', balance)
+          return balance
+        } else if (data.result && data.result.balance) {
+          const balance = (parseInt(data.result.balance) / 100000000).toString()
+          console.log('Primary API balance from data.result.balance:', balance)
           return balance
         }
       }
