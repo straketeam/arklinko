@@ -12,9 +12,13 @@ export default defineConfig({
       "@shared": path.resolve(__dirname, "../shared"),
       "@assets": path.resolve(__dirname, "../attached_assets"),
     },
+    extensions: ['.js', '.jsx', '.ts', '.tsx'],
   },
   build: {
     outDir: "../dist/public",
     emptyOutDir: true,
+    rollupOptions: {
+      external: [],
+    },
   },
 });
