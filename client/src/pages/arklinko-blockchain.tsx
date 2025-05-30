@@ -98,6 +98,55 @@ const getArkBalance = async (address: string): Promise<string> => {
   }
 }
 
+// Send ARK from game wallet to player (for wins)
+const sendWinningTransaction = async (
+  toAddress: string,
+  amount: number
+): Promise<string | null> => {
+  try {
+    // Convert ARK amount to arktoshi
+    const amountInArktoshi = Math.floor(amount * 100000000)
+    const feeInArktoshi = 600000 // 0.006 ARK fee
+    
+    // Create transaction for ARK API
+    const transaction = {
+      typeGroup: 1,
+      type: 0,
+      amount: amountInArktoshi.toString(),
+      fee: feeInArktoshi.toString(),
+      recipientId: toAddress,
+      vendorField: `ARKlinko win payout ${amount} ARK`,
+      passphrase: process.env.ARK_PRIVATE_KEY
+    }
+    
+    console.log('Sending winning transaction to:', toAddress, 'Amount:', amount)
+    
+    // Send transaction via ARK API
+    const response = await fetch('https://wallets.ark.io/api/transactions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        transactions: [transaction]
+      })
+    })
+    
+    const result = await response.json()
+    
+    if (result.data && result.data.accept && result.data.accept.length > 0) {
+      const txId = result.data.accept[0]
+      console.log('Winning transaction sent:', txId)
+      return txId
+    }
+    
+    throw new Error('Winning transaction failed')
+  } catch (error: any) {
+    console.error('Winning transaction error:', error)
+    return null
+  }
+}
+
 const sendArkTransaction = async (
   toAddress: string, 
   amount: number, 
@@ -111,29 +160,32 @@ const sendArkTransaction = async (
     // Convert ARK amount to arktoshi (ARK uses 8 decimal places)
     const amountInArktoshi = Math.floor(amount * 100000000)
 
-    // Create transaction request according to ARK Connect API specification
-    const transactionRequest = {
+    // Create transaction according to ARK Connect documentation
+    const transaction = {
+      typeGroup: 1,
       type: 0,
-      amount: amountInArktoshi,
+      amount: amountInArktoshi.toString(),
       recipientId: toAddress,
-      vendorField: `ARKlinko game ${amount} ARK`
+      vendorField: `ARKlinko game ${amount} ARK`,
+      senderPublicKey: wallet.publicKey || undefined
     }
 
-    console.log('Sending transaction:', transactionRequest)
+    console.log('Sending transaction:', transaction)
 
-    // Sign and broadcast transaction using ARK Connect
-    const result = await window.arkconnect.signTransaction(transactionRequest)
+    // Use signTransaction method with correct format
+    const result = await window.arkconnect.signTransaction(transaction)
     
     console.log('Transaction result:', result)
     
-    if (result && result.status === 'success') {
-      if (result.data && result.data.id) {
-        console.log('Transaction sent:', result.data.id)
-        return result.data.id
-      } else if (result.transactionId) {
-        console.log('Transaction sent:', result.transactionId)
-        return result.transactionId
-      }
+    if (result && result.accepted && result.accepted.length > 0) {
+      const txId = result.accepted[0]
+      console.log('Transaction sent:', txId)
+      return txId
+    }
+    
+    if (result && result.id) {
+      console.log('Transaction sent:', result.id)
+      return result.id
     }
     
     throw new Error('Transaction failed or was rejected')
@@ -405,6 +457,8 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
       
       let address = ''
       
+      let publicKey = ''
+      
       if (isConnected) {
         address = await window.arkconnect.getAddress()
       } else {
@@ -420,12 +474,22 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
         throw new Error('Could not get wallet address')
       }
       
+      // Try to get public key for transactions
+      try {
+        const accountInfo = await window.arkconnect.request('getAccount')
+        if (accountInfo && accountInfo.publicKey) {
+          publicKey = accountInfo.publicKey
+        }
+      } catch (error) {
+        console.log('Could not get public key, will proceed without it')
+      }
+      
       // Get balance from blockchain
       const balance = await getArkBalance(address)
       
       const wallet: ArkWallet = {
         address: address,
-        publicKey: '',
+        publicKey: publicKey,
         balance: balance
       }
       
@@ -562,6 +626,7 @@ export default function ARKlinkoBlockchain() {
 
   const handleBallLanded = async (multiplier: number) => {
     const bet = parseFloat(betAmount)
+    let transactionId: string | null = null
     
     try {
       // Calculate game result
@@ -569,92 +634,73 @@ export default function ARKlinkoBlockchain() {
       let isWin = false
 
       if (multiplier === -1) {
-        // Total loss - send bet to game wallet
+        // Total loss - player sends bet to game wallet
         payout = 0
         isWin = false
         
         if (wallet) {
-          const transactionId = await sendArkTransaction(GAME_WALLET_ADDRESS, bet, wallet)
-          
-          const gameResult: GameResult = {
-            betAmount: bet,
-            multiplier: multiplier,
-            payout: payout,
-            isWin: isWin,
-            transactionId: transactionId || undefined,
-            timestamp: Date.now()
-          }
-          
-          setGameHistory(prev => [gameResult, ...prev.slice(0, 9)])
-          
+          showNotification(`Processing transaction...`)
+          transactionId = await sendArkTransaction(GAME_WALLET_ADDRESS, bet, wallet)
           if (transactionId) {
             showNotification(`Total loss! ${bet} ARK sent to game wallet`, 'error')
-            // Refresh balance after transaction
-            const newBalance = await getArkBalance(wallet.address)
-            handleBalanceUpdate(newBalance)
           }
         }
       } else if (multiplier === -0.5) {
-        // Half loss - send half bet to game wallet
-        const halfBet = bet * 0.5
-        payout = halfBet
+        // Half loss - player sends half bet to game wallet
+        const lossAmount = bet * 0.5
+        payout = bet * 0.5
         isWin = false
         
         if (wallet) {
-          const transactionId = await sendArkTransaction(GAME_WALLET_ADDRESS, halfBet, wallet)
-          
-          const gameResult: GameResult = {
-            betAmount: bet,
-            multiplier: multiplier,
-            payout: payout,
-            isWin: isWin,
-            transactionId: transactionId || undefined,
-            timestamp: Date.now()
-          }
-          
-          setGameHistory(prev => [gameResult, ...prev.slice(0, 9)])
-          
+          showNotification(`Processing transaction...`)
+          transactionId = await sendArkTransaction(GAME_WALLET_ADDRESS, lossAmount, wallet)
           if (transactionId) {
-            showNotification(`Half loss! ${halfBet} ARK sent to game wallet`, 'error')
-            // Refresh balance after transaction
-            const newBalance = await getArkBalance(wallet.address)
-            handleBalanceUpdate(newBalance)
+            showNotification(`Half loss! ${lossAmount} ARK sent to game wallet`, 'error')
           }
         }
       } else if (multiplier === 0) {
-        // Even - no transaction needed
+        // Break even - no transaction needed
         payout = bet
         isWin = true
-        
-        const gameResult: GameResult = {
-          betAmount: bet,
-          multiplier: multiplier,
-          payout: payout,
-          isWin: isWin,
-          timestamp: Date.now()
-        }
-        
-        setGameHistory(prev => [gameResult, ...prev.slice(0, 9)])
-        showNotification(`Even! You keep your ${bet} ARK`)
-      } else {
-        // Win - would need to receive ARK (not implemented for demo)
+        showNotification(`Break even! You keep your ${bet} ARK`)
+      } else if (multiplier > 0) {
+        // Win - game wallet sends winnings to player
         payout = bet * multiplier
         isWin = true
         
-        const gameResult: GameResult = {
-          betAmount: bet,
-          multiplier: multiplier,
-          payout: payout,
-          isWin: isWin,
-          timestamp: Date.now()
+        if (wallet) {
+          showNotification(`Processing winning transaction...`)
+          transactionId = await sendWinningTransaction(wallet.address, payout)
+          if (transactionId) {
+            showNotification(`You won ${payout.toFixed(4)} ARK! (${multiplier}x)`)
+          } else {
+            showNotification(`Win calculated but transaction failed`, 'error')
+          }
         }
-        
-        setGameHistory(prev => [gameResult, ...prev.slice(0, 9)])
-        showNotification(`You won ${payout.toFixed(4)} ARK! (${multiplier}x)`)
       }
-    } catch (error) {
-      console.error('Game result error:', error)
-      showNotification('Game processing error', 'error')
+
+      // Add to game history with transaction ID
+      const gameResult: GameResult = {
+        betAmount: bet,
+        multiplier,
+        payout,
+        isWin,
+        transactionId: transactionId || undefined,
+        timestamp: Date.now()
+      }
+      
+      setGameHistory(prev => [gameResult, ...prev.slice(0, 9)])
+      
+      // Refresh balance after blockchain confirmation delay
+      setTimeout(async () => {
+        if (wallet) {
+          const newBalance = await getArkBalance(wallet.address)
+          handleBalanceUpdate(newBalance)
+        }
+      }, 3000) // 3 second delay for blockchain confirmation
+      
+    } catch (error: any) {
+      showNotification(`Game Error: ${error.message}`, 'error')
     }
     
     setGameState('idle')
@@ -864,7 +910,6 @@ export default function ARKlinkoBlockchain() {
   )
 }
 
-// Window interface for ARK Connect
 declare global {
   interface Window {
     arkconnect?: {
@@ -876,6 +921,7 @@ declare global {
       getNetwork: () => Promise<string>;
       signTransaction: (request: any) => Promise<any>;
       signMessage: (request: any) => Promise<any>;
+      request: (method: string, params?: any) => Promise<any>;
       version: () => string;
     };
   }
