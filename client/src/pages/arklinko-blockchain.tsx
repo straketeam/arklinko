@@ -113,13 +113,10 @@ const sendArkTransaction = async (
 
     // Create transaction request according to ARK Connect API specification
     const transactionRequest = {
-      typeGroup: 1,
       type: 0,
-      amount: amountInArktoshi.toString(),
+      amount: amountInArktoshi,
       recipientId: toAddress,
-      vendorField: `ARKlinko game ${amount} ARK`,
-      fee: '600000', // 0.006 ARK in arktoshi
-      nonce: undefined // Let ARK Connect handle nonce
+      vendorField: `ARKlinko game ${amount} ARK`
     }
 
     console.log('Sending transaction:', transactionRequest)
