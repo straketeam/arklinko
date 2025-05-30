@@ -95,8 +95,8 @@ const sendWinningTransaction = async (
   amount: number
 ): Promise<string | null> => {
   try {
-    // Use server endpoint for real winning transactions
-    const response = await fetch('/api/game/send-winnings', {
+    // Use Netlify function for real winning transactions
+    const response = await fetch('/.netlify/functions/send-winnings', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -148,11 +148,11 @@ const sendArkTransaction = async (
     
     console.log('Sending real ARK transaction:', { toAddress, amount, amountInArktoshi })
 
-    // Try the exact ARK Connect format based on their TypeScript definitions
+    // ARK Connect expects fee in ARK units (not arktoshi) and must be ≤ 1
     const txData = {
       recipientId: toAddress,
       amount: amountInArktoshi,
-      fee: 600000,
+      fee: 0.006, // Fee in ARK units, must be ≤ 1
       vendorField: `ARKlinko ${amount} ARK`
     }
     
