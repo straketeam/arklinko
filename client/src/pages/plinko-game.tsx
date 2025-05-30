@@ -33,7 +33,7 @@ const GRAVITY = 0.3
 const BOUNCE_DAMPING = 0.7
 const HORIZONTAL_DAMPING = 0.98
 
-// Plinko multipliers with proper -0.5x handling
+// Plinko multipliers
 const MULTIPLIERS = [10, 5, 4, 3, 2, -0.5, 1.5, 1.25, 0, -1, 0, 1.25, 1.5, -0.5, 2, 3, 4, 5, 10]
 
 // Simple notification function
@@ -297,44 +297,75 @@ function PlinkoCanvas({
   )
 }
 
-// ARK Connect with proper API implementation and enhanced balance debugging
-function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanceUpdate }: {
+// ARK Connect with enhanced balance debugging
+function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet }: {
   onWalletConnected: (wallet: ArkWallet) => void
   onDisconnect: () => void
   connectedWallet?: ArkWallet | null
-  onBalanceUpdate?: (balance: string) => void
 }) {
   const [isConnecting, setIsConnecting] = useState(false)
 
-  // Fetch real-time balance from ARK API
-  const fetchRealTimeBalance = useCallback(async (address: string) => {
+  // Get balance from Mainnet API directly
+  const getMainnetBalance = async (address: string): Promise<string> => {
     try {
-      const response = await fetch(`https://api.ark.io/api/v2/wallets/${address}`)
-      const data = await response.json()
+      console.log('Fetching balance from ARK Mainnet API for:', address)
       
-      if (data.data && data.data.balance) {
-        const balance = (parseInt(data.data.balance) / 100000000).toString()
-        if (onBalanceUpdate) {
-          onBalanceUpdate(balance)
+      // Try the correct ARK Core API endpoint
+      const response = await fetch(`https://wallets.ark.io/api/wallets/${address}`)
+      console.log('API Response status:', response.status)
+      
+      if (!response.ok) {
+        console.log('First API failed, trying alternative endpoint...')
+        // Try alternative endpoint
+        const response2 = await fetch(`https://api.ark.io/api/wallets/${address}`)
+        console.log('Alternative API Response status:', response2.status)
+        
+        if (!response2.ok) {
+          console.log('Both APIs failed, trying v2 endpoint...')
+          // Try v2 endpoint with different structure
+          const response3 = await fetch(`https://wallets.ark.io/api/v2/wallets/${address}`)
+          console.log('V2 API Response status:', response3.status)
+          
+          if (response3.ok) {
+            const data = await response3.json()
+            console.log('V2 API response:', data)
+            
+            if (data.data && data.data.balance) {
+              const balance = (parseInt(data.data.balance) / 100000000).toString()
+              console.log('ARK V2 API balance:', balance)
+              return balance
+            }
+          }
+          
+          throw new Error(`All API endpoints failed. Status: ${response.status}, ${response2.status}, ${response3.status}`)
         }
-        return balance
+        
+        const data = await response2.json()
+        console.log('Alternative API response:', data)
+        
+        if (data.balance) {
+          const balance = (parseInt(data.balance) / 100000000).toString()
+          console.log('Alternative API balance:', balance)
+          return balance
+        }
+      } else {
+        const data = await response.json()
+        console.log('Primary API response:', data)
+        
+        if (data.balance) {
+          const balance = (parseInt(data.balance) / 100000000).toString()
+          console.log('Primary API balance:', balance)
+          return balance
+        }
       }
+      
+      console.log('No balance data found in any API response')
+      return '0'
     } catch (error) {
-      console.error('Error fetching real-time balance:', error)
+      console.error('Error fetching balance from API:', error)
+      return '0'
     }
-    return null
-  }, [onBalanceUpdate])
-
-  // Auto-update balance every 5 seconds when connected
-  useEffect(() => {
-    if (!connectedWallet?.address) return
-
-    const interval = setInterval(() => {
-      fetchRealTimeBalance(connectedWallet.address)
-    }, 5000)
-    
-    return () => clearInterval(interval)
-  }, [connectedWallet?.address, fetchRealTimeBalance])
+  }
 
   const connectWallet = async () => {
     if (!window.arkconnect) {
@@ -345,172 +376,86 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
     setIsConnecting(true)
     
     try {
-      console.log('Attempting ARK Connect...')
+      console.log('Connecting to ARK Connect...')
       
-      // Check if already connected first
-      try {
-        const isConnected = await window.arkconnect.isConnected()
-        console.log('Is already connected:', isConnected)
-        
-        if (isConnected) {
-          console.log('Already connected, getting wallet info...')
-          const address = await window.arkconnect.getAddress()
-          const balance = await window.arkconnect.getBalance()
-          console.log('Raw balance from existing connection:', balance)
-          
-          let arkBalance = '0'
-          if (balance && balance !== '0') {
-            const directBalance = parseFloat(balance)
-            const arktoshiBalance = parseFloat(balance) / 100000000
-            
-            if (directBalance > 0 && directBalance < 1000000) {
-              arkBalance = directBalance.toString()
-            } else if (arktoshiBalance > 0) {
-              arkBalance = arktoshiBalance.toString()
-            } else {
-              arkBalance = balance
-            }
-          }
-          
-          const wallet: ArkWallet = {
-            address: address,
-            publicKey: '',
-            balance: arkBalance
-          }
-          
-          onWalletConnected(wallet)
-          showNotification(`Connected to ${address.substring(0, 10)}... Balance: ${arkBalance} ARK`)
-          return
-        }
-      } catch (checkError) {
-        console.log('Error checking existing connection:', checkError)
-      }
+      // Check if already connected
+      const isConnected = await window.arkconnect.isConnected()
+      console.log('Connection status:', isConnected)
       
-      // Attempt new connection
-      const result = await window.arkconnect.connect()
-      console.log('ARK Connect result:', result)
-      console.log('Result type:', typeof result)
-      console.log('Result properties:', result ? Object.keys(result) : 'null')
-      
-      // Check if connection was successful
-      if (result && typeof result === 'object' && result.status === 'success') {
-        console.log('Connection successful, now getting account data...')
-        
-        // Use the correct ARK Connect API methods
-        try {
-          console.log('Getting address using getAddress()...')
-          const address = await window.arkconnect.getAddress()
-          console.log('Address from getAddress():', address)
-          
-          if (address) {
-            console.log('Getting balance using getBalance()...')
-            const balance = await window.arkconnect.getBalance()
-            console.log('Raw balance from getBalance():', balance)
-            console.log('Balance type:', typeof balance)
-            console.log('Balance length:', balance.length)
-            
-            let arkBalance = '0'
-            
-            // Try different conversion approaches
-            if (balance && balance !== '0') {
-              // First try: assume it's already in ARK format
-              const directBalance = parseFloat(balance)
-              console.log('Direct parse result:', directBalance)
-              
-              // Second try: assume it's in arktoshi format (needs division)
-              const arktoshiBalance = parseFloat(balance) / 100000000
-              console.log('Arktoshi conversion result:', arktoshiBalance)
-              
-              // Use the larger of the two (most likely correct)
-              if (directBalance > 0 && directBalance < 1000000) {
-                arkBalance = directBalance.toString()
-                console.log('Using direct balance:', arkBalance)
-              } else if (arktoshiBalance > 0) {
-                arkBalance = arktoshiBalance.toString()
-                console.log('Using arktoshi conversion:', arkBalance)
-              } else {
-                arkBalance = balance
-                console.log('Using raw balance:', arkBalance)
-              }
-            }
-            
-            console.log('Final arkBalance:', arkBalance)
-            
-            const wallet: ArkWallet = {
-              address: address,
-              publicKey: '',
-              balance: arkBalance
-            }
-            
-            onWalletConnected(wallet)
-            showNotification(`Connected to ${address.substring(0, 10)}... Balance: ${arkBalance} ARK`)
-            return
-          }
-          
-          throw new Error('Could not retrieve wallet address after successful connection')
-        } catch (accountError) {
-          console.error('Failed to get account after successful connection:', accountError)
-          throw new Error('Connected successfully but could not retrieve wallet data')
-        }
-      }
-      
-      // Handle error responses
-      if (result && typeof result === 'object' && result.status === 'failed') {
-        if (result.message?.includes('already connected')) {
-          showNotification('Domain already connected. Please refresh the page and try again.', 'error')
-          return
-        }
-        throw new Error(result.message || 'ARK Connect failed')
-      }
-      
-      // Handle direct address return (fallback)
       let address = ''
       
-      if (typeof result === 'string') {
-        address = result
-      } else if (result && typeof result === 'object') {
-        address = result.address || result.walletAddress || result.account || result.wallet || ''
+      if (isConnected) {
+        console.log('Already connected, getting address...')
+        address = await window.arkconnect.getAddress()
+      } else {
+        console.log('Not connected, attempting connection...')
+        const result = await window.arkconnect.connect()
+        console.log('Connection result:', result)
+        
+        if (result && result.status === 'success') {
+          address = await window.arkconnect.getAddress()
+        } else {
+          throw new Error('Connection failed')
+        }
       }
       
       if (!address) {
-        const resultInfo = result ? JSON.stringify(result) : 'null'
-        throw new Error(`No wallet address found in ARK Connect response: ${resultInfo}`)
+        throw new Error('Could not get wallet address')
       }
       
-      // Get balance and create wallet object
-      const balance = await window.arkconnect.getBalance()
-      console.log('Fallback balance:', balance)
+      console.log('Got address:', address)
       
-      let arkBalance = '0'
-      if (balance && balance !== '0') {
-        const directBalance = parseFloat(balance)
-        const arktoshiBalance = parseFloat(balance) / 100000000
+      // Try to get balance from ARK Connect first as per docs
+      console.log('Attempting to get balance from ARK Connect...')
+      let balance = '0'
+      
+      try {
+        const arkConnectBalance = await window.arkconnect.getBalance()
+        console.log('ARK Connect getBalance() returned:', arkConnectBalance)
+        console.log('Type:', typeof arkConnectBalance)
+        console.log('String length:', arkConnectBalance?.length)
         
-        if (directBalance > 0 && directBalance < 1000000) {
-          arkBalance = directBalance.toString()
-        } else if (arktoshiBalance > 0) {
-          arkBalance = arktoshiBalance.toString()
-        } else {
-          arkBalance = balance
+        // Try to parse the balance
+        if (arkConnectBalance && arkConnectBalance !== '0') {
+          const numBalance = parseFloat(arkConnectBalance)
+          if (numBalance > 0) {
+            // Check if it's in ARK format or arktoshi format
+            if (numBalance > 100000000) {
+              // Likely arktoshi, convert to ARK
+              balance = (numBalance / 100000000).toString()
+              console.log('Converted from arktoshi:', balance)
+            } else {
+              // Likely already in ARK format
+              balance = numBalance.toString()
+              console.log('Using as ARK amount:', balance)
+            }
+          }
         }
+        
+        // If ARK Connect balance is still 0, fall back to API
+        if (balance === '0') {
+          console.log('ARK Connect returned 0, trying API fallback...')
+          balance = await getMainnetBalance(address)
+        }
+        
+      } catch (balanceError) {
+        console.error('Error getting balance from ARK Connect:', balanceError)
+        console.log('Falling back to API...')
+        balance = await getMainnetBalance(address)
       }
       
       const wallet: ArkWallet = {
         address: address,
         publicKey: '',
-        balance: arkBalance
+        balance: balance
       }
       
       onWalletConnected(wallet)
-      showNotification(`Connected to ${address.substring(0, 10)}... Balance: ${arkBalance} ARK`)
+      showNotification(`Connected! Balance: ${balance} ARK`)
       
     } catch (error: any) {
-      console.error('ARK Connect error:', error)
-      if (error.message?.includes('already connected')) {
-        showNotification('Wallet already connected. Please refresh page first.', 'error')
-      } else {
-        showNotification(`Connection failed: ${error.message}`, 'error')
-      }
+      console.error('Connection error:', error)
+      showNotification(`Connection failed: ${error.message}`, 'error')
     } finally {
       setIsConnecting(false)
     }
@@ -588,25 +533,16 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
 }
 
 // Main ARKlinko Game Component
-export default function ARKlinko() {
+export default function ARKlinkoFixed() {
   const [wallet, setWallet] = useState<ArkWallet | null>(null)
   const [betAmount, setBetAmount] = useState('')
   const [gameState, setGameState] = useState<'idle' | 'playing'>('idle')
   const [triggerDrop, setTriggerDrop] = useState(false)
   const [gameHistory, setGameHistory] = useState<any[]>([])
-  const [currentBalance, setCurrentBalance] = useState<string>('')
 
   const handleWalletConnected = (connectedWallet: ArkWallet) => {
-    console.log('Wallet connected:', connectedWallet.address)
+    console.log('Wallet connected:', connectedWallet.address, 'Balance:', connectedWallet.balance)
     setWallet(connectedWallet)
-    setCurrentBalance(connectedWallet.balance)
-  }
-
-  const handleBalanceUpdate = (newBalance: string) => {
-    setCurrentBalance(newBalance)
-    if (wallet) {
-      setWallet(prev => prev ? { ...prev, balance: newBalance } : null)
-    }
   }
 
   const handleDisconnect = () => {
@@ -614,7 +550,6 @@ export default function ARKlinko() {
     setWallet(null)
     setBetAmount('')
     setGameHistory([])
-    setCurrentBalance('')
   }
 
   const handleBallLanded = async (multiplier: number) => {
@@ -652,22 +587,6 @@ export default function ARKlinko() {
         showNotification(`Small win: ${(bet * multiplier).toFixed(4)} ARK (${multiplier}x)`)
       }
       
-      // Force balance refresh after game
-      if (wallet?.address) {
-        setTimeout(async () => {
-          try {
-            const response = await fetch(`https://api.ark.io/api/v2/wallets/${wallet.address}`)
-            const data = await response.json()
-            if (data.data?.balance) {
-              const newBalance = (parseInt(data.data.balance) / 100000000).toString()
-              handleBalanceUpdate(newBalance)
-            }
-          } catch (error) {
-            console.error('Error refreshing balance:', error)
-          }
-        }, 1000)
-      }
-      
     } catch (error: any) {
       showNotification(`Game Error: ${error.message}`, 'error')
     }
@@ -681,7 +600,7 @@ export default function ARKlinko() {
 
   const playGame = () => {
     const bet = parseFloat(betAmount)
-    const balance = parseFloat(currentBalance || wallet?.balance || '0')
+    const balance = parseFloat(wallet?.balance || '0')
     
     if (!bet || bet < MIN_BET || bet > MAX_BET) {
       showNotification(`Bet must be between ${MIN_BET} and ${MAX_BET} ARK`, 'error')
@@ -696,8 +615,6 @@ export default function ARKlinko() {
     setGameState('playing')
     setTriggerDrop(true)
   }
-
-  const displayBalance = currentBalance || wallet?.balance || '0'
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#111827', color: 'white' }}>
@@ -728,7 +645,6 @@ export default function ARKlinko() {
                 onWalletConnected={handleWalletConnected}
                 onDisconnect={handleDisconnect}
                 connectedWallet={wallet}
-                onBalanceUpdate={handleBalanceUpdate}
               />
             </div>
           </div>
@@ -795,11 +711,10 @@ export default function ARKlinko() {
                 </button>
                 
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 4px 0' }}>Live Balance</p>
+                  <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 4px 0' }}>Wallet Balance</p>
                   <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#22c55e', margin: '0' }}>
-                    {displayBalance} ARK
+                    {wallet.balance} ARK
                   </p>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Updates every 5s</p>
                 </div>
               </div>
             </div>
