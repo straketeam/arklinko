@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import crypto from "crypto";
-import { storage } from "./storage.js";
+import { storage } from "./storage";
 import {
   insertUserSchema,
   insertGameSchema,
@@ -9,7 +9,7 @@ import {
   insertSeedSchema,
 } from "@shared/schema";
 
-// ... (all the existing route code stays the same) ...
+// ... rest of the file remains the same as before ...
 
   // Play Plinko game - NEW ENDPOINT
   app.post("/api/game/play", async (req, res) => {
