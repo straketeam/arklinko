@@ -98,46 +98,35 @@ const getArkBalance = async (address: string): Promise<string> => {
   }
 }
 
-// Send ARK from game wallet to player (for wins)
+// Send ARK from game wallet to player (for wins) - SERVER SIDE ONLY
 const sendWinningTransaction = async (
   toAddress: string,
   amount: number
 ): Promise<string | null> => {
   try {
-    // Convert ARK amount to arktoshi
-    const amountInArktoshi = Math.floor(amount * 100000000)
-    const feeInArktoshi = 600000 // 0.006 ARK fee
+    console.log('Requesting winning transaction from server for:', toAddress, 'Amount:', amount)
     
-    // Create transaction for ARK API
-    const transaction = {
-      typeGroup: 1,
-      type: 0,
-      amount: amountInArktoshi.toString(),
-      fee: feeInArktoshi.toString(),
-      recipientId: toAddress,
-      vendorField: `ARKlinko win payout ${amount} ARK`,
-      passphrase: process.env.ARK_PRIVATE_KEY
-    }
-    
-    console.log('Sending winning transaction to:', toAddress, 'Amount:', amount)
-    
-    // Send transaction via ARK API
-    const response = await fetch('https://wallets.ark.io/api/transactions', {
+    // Call backend API to send winning transaction using game wallet private key
+    const response = await fetch('/api/game/send-winnings', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        transactions: [transaction]
+        recipientAddress: toAddress,
+        amount: amount
       })
     })
     
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`)
+    }
+    
     const result = await response.json()
     
-    if (result.data && result.data.accept && result.data.accept.length > 0) {
-      const txId = result.data.accept[0]
-      console.log('Winning transaction sent:', txId)
-      return txId
+    if (result.success && result.transactionId) {
+      console.log('Winning transaction sent:', result.transactionId)
+      return result.transactionId
     }
     
     throw new Error('Winning transaction failed')
