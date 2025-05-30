@@ -297,7 +297,7 @@ function PlinkoCanvas({
   )
 }
 
-// ARK Connect with proper API implementation
+// ARK Connect with proper API implementation and enhanced balance debugging
 function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanceUpdate }: {
   onWalletConnected: (wallet: ArkWallet) => void
   onDisconnect: () => void
@@ -356,7 +356,21 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
           console.log('Already connected, getting wallet info...')
           const address = await window.arkconnect.getAddress()
           const balance = await window.arkconnect.getBalance()
-          const arkBalance = (parseFloat(balance) / 100000000).toString()
+          console.log('Raw balance from existing connection:', balance)
+          
+          let arkBalance = '0'
+          if (balance && balance !== '0') {
+            const directBalance = parseFloat(balance)
+            const arktoshiBalance = parseFloat(balance) / 100000000
+            
+            if (directBalance > 0 && directBalance < 1000000) {
+              arkBalance = directBalance.toString()
+            } else if (arktoshiBalance > 0) {
+              arkBalance = arktoshiBalance.toString()
+            } else {
+              arkBalance = balance
+            }
+          }
           
           const wallet: ArkWallet = {
             address: address,
@@ -365,7 +379,7 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
           }
           
           onWalletConnected(wallet)
-          showNotification(`Connected to ${address.substring(0, 10)}...`)
+          showNotification(`Connected to ${address.substring(0, 10)}... Balance: ${arkBalance} ARK`)
           return
         }
       } catch (checkError) {
@@ -391,10 +405,36 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
           if (address) {
             console.log('Getting balance using getBalance()...')
             const balance = await window.arkconnect.getBalance()
-            console.log('Balance from getBalance():', balance)
+            console.log('Raw balance from getBalance():', balance)
+            console.log('Balance type:', typeof balance)
+            console.log('Balance length:', balance.length)
             
-            // Convert balance from arktoshi to ARK (divide by 100,000,000)
-            const arkBalance = (parseFloat(balance) / 100000000).toString()
+            let arkBalance = '0'
+            
+            // Try different conversion approaches
+            if (balance && balance !== '0') {
+              // First try: assume it's already in ARK format
+              const directBalance = parseFloat(balance)
+              console.log('Direct parse result:', directBalance)
+              
+              // Second try: assume it's in arktoshi format (needs division)
+              const arktoshiBalance = parseFloat(balance) / 100000000
+              console.log('Arktoshi conversion result:', arktoshiBalance)
+              
+              // Use the larger of the two (most likely correct)
+              if (directBalance > 0 && directBalance < 1000000) {
+                arkBalance = directBalance.toString()
+                console.log('Using direct balance:', arkBalance)
+              } else if (arktoshiBalance > 0) {
+                arkBalance = arktoshiBalance.toString()
+                console.log('Using arktoshi conversion:', arkBalance)
+              } else {
+                arkBalance = balance
+                console.log('Using raw balance:', arkBalance)
+              }
+            }
+            
+            console.log('Final arkBalance:', arkBalance)
             
             const wallet: ArkWallet = {
               address: address,
@@ -403,7 +443,7 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
             }
             
             onWalletConnected(wallet)
-            showNotification(`Connected to ${address.substring(0, 10)}...`)
+            showNotification(`Connected to ${address.substring(0, 10)}... Balance: ${arkBalance} ARK`)
             return
           }
           
@@ -439,7 +479,21 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
       
       // Get balance and create wallet object
       const balance = await window.arkconnect.getBalance()
-      const arkBalance = (parseFloat(balance) / 100000000).toString()
+      console.log('Fallback balance:', balance)
+      
+      let arkBalance = '0'
+      if (balance && balance !== '0') {
+        const directBalance = parseFloat(balance)
+        const arktoshiBalance = parseFloat(balance) / 100000000
+        
+        if (directBalance > 0 && directBalance < 1000000) {
+          arkBalance = directBalance.toString()
+        } else if (arktoshiBalance > 0) {
+          arkBalance = arktoshiBalance.toString()
+        } else {
+          arkBalance = balance
+        }
+      }
       
       const wallet: ArkWallet = {
         address: address,
@@ -448,7 +502,7 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
       }
       
       onWalletConnected(wallet)
-      showNotification(`Connected to ${address.substring(0, 10)}...`)
+      showNotification(`Connected to ${address.substring(0, 10)}... Balance: ${arkBalance} ARK`)
       
     } catch (error: any) {
       console.error('ARK Connect error:', error)
