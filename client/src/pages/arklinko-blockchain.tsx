@@ -98,15 +98,15 @@ const getArkBalance = async (address: string): Promise<string> => {
   }
 }
 
-// Send ARK from game wallet to player (for wins) - SERVER SIDE ONLY
+// Send ARK from game wallet to player (for wins) - REAL TRANSACTIONS
 const sendWinningTransaction = async (
   toAddress: string,
   amount: number
 ): Promise<string | null> => {
   try {
-    console.log('Requesting winning transaction from server for:', toAddress, 'Amount:', amount)
+    console.log('Sending real winning transaction to:', toAddress, 'Amount:', amount)
     
-    // Call backend API to send winning transaction using game wallet private key
+    // Call backend API to send real winning transaction using game wallet private key
     const response = await fetch('/api/game/send-winnings', {
       method: 'POST',
       headers: {
@@ -125,7 +125,7 @@ const sendWinningTransaction = async (
     const result = await response.json()
     
     if (result.success && result.transactionId) {
-      console.log('Winning transaction sent:', result.transactionId)
+      console.log('Real winning transaction sent:', result.transactionId)
       return result.transactionId
     }
     
@@ -149,28 +149,19 @@ const sendArkTransaction = async (
     // Convert ARK amount to arktoshi (ARK uses 8 decimal places)
     const amountInArktoshi = Math.floor(amount * 100000000)
 
-    // Create transaction according to ARK Connect documentation
-    const transaction = {
-      typeGroup: 1,
-      type: 0,
-      amount: amountInArktoshi.toString(),
+    // Create transaction request according to ARK Connect specifications
+    const transactionRequest = {
+      amount: amountInArktoshi,
       recipientId: toAddress,
-      vendorField: `ARKlinko game ${amount} ARK`,
-      senderPublicKey: wallet.publicKey || undefined
+      vendorField: `ARKlinko game ${amount} ARK`
     }
 
-    console.log('Sending transaction:', transaction)
+    console.log('Sending transaction:', transactionRequest)
 
-    // Use signTransaction method with correct format
-    const result = await window.arkconnect.signTransaction(transaction)
+    // Use request method with 'signTransaction' command
+    const result = await window.arkconnect.request('signTransaction', transactionRequest)
     
     console.log('Transaction result:', result)
-    
-    if (result && result.accepted && result.accepted.length > 0) {
-      const txId = result.accepted[0]
-      console.log('Transaction sent:', txId)
-      return txId
-    }
     
     if (result && result.id) {
       console.log('Transaction sent:', result.id)
@@ -779,139 +770,4 @@ export default function ARKlinkoBlockchain() {
 
           {/* Game Controls */}
           <div style={{ backgroundColor: '#1f2937', borderRadius: '8px', padding: '24px' }}>
-            <div style={{ display: 'flex', gap: '24px', alignItems: 'end', flexWrap: 'wrap' }}>
-              <div style={{ flex: '1', minWidth: '200px' }}>
-                <label style={{ 
-                  display: 'block', 
-                  fontSize: '14px', 
-                  fontWeight: 'bold', 
-                  marginBottom: '8px',
-                  color: '#e5e7eb'
-                }}>
-                  Bet Amount (ARK)
-                </label>
-                <input
-                  type="number"
-                  min={MIN_BET}
-                  max={MAX_BET}
-                  step="0.0001"
-                  value={betAmount}
-                  onChange={(e) => setBetAmount(e.target.value)}
-                  disabled={gameState === 'playing' || !wallet}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #4b5563',
-                    borderRadius: '6px',
-                    backgroundColor: '#374151',
-                    color: 'white',
-                    fontSize: '16px'
-                  }}
-                  placeholder={`${MIN_BET} - ${MAX_BET} ARK`}
-                />
-                <p style={{ 
-                  fontSize: '12px', 
-                  color: '#9ca3af', 
-                  margin: '4px 0 0 0' 
-                }}>
-                  Min: {MIN_BET} ARK, Max: {MAX_BET} ARK
-                </p>
-              </div>
-              
-              <button
-                onClick={handlePlayGame}
-                disabled={gameState === 'playing' || !wallet || !betAmount}
-                style={{
-                  padding: '14px 32px',
-                  backgroundColor: gameState === 'playing' ? '#6b7280' : '#dc2626',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  cursor: gameState === 'playing' || !wallet || !betAmount ? 'not-allowed' : 'pointer',
-                  minWidth: '120px'
-                }}
-              >
-                {gameState === 'playing' ? 'Playing...' : 'Drop Ball'}
-              </button>
-            </div>
-          </div>
-
-          {/* Game History */}
-          {gameHistory.length > 0 && (
-            <div style={{ backgroundColor: '#1f2937', borderRadius: '8px', padding: '24px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', color: 'white' }}>
-                Recent Games
-              </h3>
-              <div style={{ display: 'grid', gap: '8px' }}>
-                {gameHistory.map((game, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '12px',
-                      backgroundColor: '#374151',
-                      borderRadius: '6px'
-                    }}
-                  >
-                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                      <span style={{ color: '#9ca3af', fontSize: '14px' }}>
-                        {new Date(game.timestamp).toLocaleTimeString()}
-                      </span>
-                      <span style={{ fontWeight: 'bold' }}>
-                        {game.betAmount} ARK
-                      </span>
-                      <span style={{
-                        color: game.multiplier === -1 ? '#ef4444' : 
-                              game.multiplier === -0.5 ? '#f59e0b' : 
-                              game.multiplier === 0 ? '#fbbf24' : '#22c55e'
-                      }}>
-                        {game.multiplier === -1 ? '☠ Total Loss' :
-                         game.multiplier === -0.5 ? '-0.5x' :
-                         game.multiplier === 0 ? 'EVEN' :
-                         `${game.multiplier}x`}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{
-                        fontWeight: 'bold',
-                        color: game.isWin ? '#22c55e' : '#ef4444'
-                      }}>
-                        {game.isWin ? `+${game.payout.toFixed(4)}` : `-${(game.betAmount - game.payout).toFixed(4)}`} ARK
-                      </span>
-                      {game.transactionId && (
-                        <span style={{ fontSize: '12px', color: '#9ca3af' }}>
-                          TX: {game.transactionId.substring(0, 8)}...
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-declare global {
-  interface Window {
-    arkconnect?: {
-      connect: () => Promise<any>;
-      disconnect: () => Promise<void>;
-      getAddress: () => Promise<string>;
-      getBalance: () => Promise<string>;
-      isConnected: () => Promise<boolean>;
-      getNetwork: () => Promise<string>;
-      signTransaction: (request: any) => Promise<any>;
-      signMessage: (request: any) => Promise<any>;
-      request: (method: string, params?: any) => Promise<any>;
-      version: () => string;
-    };
-  }
-}
+            <div style={{ display: 'flex', gap: '24px', alignItems: 'end', flexW
