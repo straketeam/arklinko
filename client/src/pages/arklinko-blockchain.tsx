@@ -153,9 +153,10 @@ const sendArkTransaction = async (
     console.log('Sending ARK transaction:', { toAddress, amount, amountInArktoshi })
 
     // Use ARK Connect signTransaction method with correct structure
+    // The function adds type: "transfer" automatically and expects fee in ARK (not arktoshi)
     const transactionRequest = {
-      type: 0, // Transfer transaction type
       amount: amountInArktoshi,
+      fee: 0.006, // Fee in ARK units (not arktoshi) - must be ≤ 1 ARK
       recipientId: toAddress,
       vendorField: `ARKlinko game ${amount} ARK`
     }
