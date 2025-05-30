@@ -4,6 +4,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import fs from "fs";
 import path from "path";
+import express from "express";
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
