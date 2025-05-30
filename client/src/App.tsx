@@ -1,8 +1,8 @@
 import React from 'react'
-import ARKlinkoBlockchain from '@/pages/arklinko-blockchain'
+import ARKlinkoSimple from '@/pages/arklinko-simple'
 
 function App() {
-  return <ARKlinkoBlockchain />
+  return <ARKlinkoSimple />
 }
 
 export default App
