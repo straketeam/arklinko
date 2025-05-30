@@ -422,3 +422,405 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
       }
 
       console.log('ARK Connect found, checking for existing connection...')
+      
+      let address, balance
+      
+      try {
+        const isConnected = await window.arkconnect.isConnected()
+        if (isConnected) {
+          address = await window.arkconnect.getAddress()
+          balance = await window.arkconnect.getBalance()
+        } else {
+          await window.arkconnect.connect()
+          address = await window.arkconnect.getAddress()
+          balance = await window.arkconnect.getBalance()
+        }
+      } catch (connectError) {
+        console.log('Connection needed, requesting connect...')
+        await window.arkconnect.connect()
+        address = await window.arkconnect.getAddress()
+        balance = await window.arkconnect.getBalance()
+      }
+      
+      let formattedBalance = balance
+      if (typeof balance === 'number') {
+        formattedBalance = (balance / 100000000).toString()
+      } else if (typeof balance === 'string') {
+        const numBalance = parseFloat(balance)
+        if (numBalance > 1000000) {
+          formattedBalance = (numBalance / 100000000).toString()
+        }
+      }
+      
+      console.log('Connected to ARK wallet:', { address, balance, formattedBalance })
+
+      const wallet: ArkWallet = {
+        address: address,
+        balance: formattedBalance,
+        publicKey: ''
+      }
+
+      onWalletConnected(wallet)
+      showNotification(`Connected to ARK wallet: ${address.substring(0, 10)}...`)
+      
+    } catch (error: any) {
+      console.error('ARK Connect error:', error)
+      showNotification(`Connection failed: ${error.message || 'Unknown error'}`, 'error')
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  const refreshBalance = async () => {
+    if (!connectedWallet || !window.arkconnect) return
+    
+    try {
+      const balance = await window.arkconnect.getBalance()
+      
+      let formattedBalance = balance
+      if (typeof balance === 'number') {
+        formattedBalance = (balance / 100000000).toString()
+      } else if (typeof balance === 'string') {
+        const numBalance = parseFloat(balance)
+        if (numBalance > 1000000) {
+          formattedBalance = (numBalance / 100000000).toString()
+        }
+      }
+      
+      onBalanceUpdate(formattedBalance)
+    } catch (error) {
+      console.error('Failed to refresh balance:', error)
+    }
+  }
+
+  return (
+    <div className="mb-6 bg-white rounded-lg shadow-md">
+      <div className="p-4 border-b border-gray-200">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <span className="text-blue-600">💰</span>
+          ARK Wallet Connection
+        </h3>
+      </div>
+      <div className="p-4">
+        {connectedWallet ? (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm text-gray-600">Address:</p>
+                <p className="font-mono text-sm">{connectedWallet.address}</p>
+              </div>
+              <button 
+                onClick={refreshBalance}
+                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm border"
+              >
+                Refresh
+              </button>
+            </div>
+            
+            <div>
+              <p className="text-sm text-gray-600">Balance:</p>
+              <p className="font-mono text-lg font-bold">{connectedWallet.balance} ARK</p>
+            </div>
+            
+            <button 
+              onClick={onDisconnect}
+              className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded border"
+            >
+              Disconnect Wallet
+            </button>
+          </div>
+        ) : (
+          <div className="text-center space-y-4">
+            <p className="text-gray-600">Connect your ARK wallet to start playing</p>
+            <button 
+              onClick={connectWallet} 
+              disabled={connecting}
+              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded"
+            >
+              {connecting ? 'Connecting...' : 'Connect ARK Wallet'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function App() {
+  const [connectedWallet, setConnectedWallet] = useState<ArkWallet | null>(null)
+  const [betAmount, setBetAmount] = useState('0.1')
+  const [gameHistory, setGameHistory] = useState<GameResult[]>([])
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [triggerDrop, setTriggerDrop] = useState(false)
+
+  const handleWalletConnected = (connectedWallet: ArkWallet) => {
+    setConnectedWallet(connectedWallet)
+  }
+
+  const handleDisconnect = () => {
+    setConnectedWallet(null)
+    showNotification('Wallet disconnected')
+  }
+
+  const handleBalanceUpdate = (newBalance: string) => {
+    if (connectedWallet) {
+      setConnectedWallet({
+        ...connectedWallet,
+        balance: newBalance
+      })
+    }
+  }
+
+  const handleBallLanded = async (multiplier: number) => {
+    setIsPlaying(false)
+    
+    const bet = parseFloat(betAmount)
+    const payout = bet * multiplier
+    const isWin = multiplier >= 1.0
+
+    console.log('Ball landed!', { multiplier, bet, payout, isWin })
+
+    if (!connectedWallet) {
+      showNotification('Wallet not connected', 'error')
+      return
+    }
+
+    let transactionId: string | undefined
+
+    try {
+      if (isWin) {
+        console.log('Player won! Sending winning transaction...')
+        
+        const response = await fetch('/.netlify/functions/send-winnings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            recipientAddress: connectedWallet.address,
+            amount: payout
+          })
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success) {
+            transactionId = result.transactionId
+            showNotification(`You won ${payout} ARK! Transaction: ${transactionId.substring(0, 10)}...`, 'success')
+          } else {
+            throw new Error(result.error || 'Failed to send winnings')
+          }
+        } else {
+          throw new Error(`Server error: ${response.status}`)
+        }
+      } else {
+        console.log('Player lost. Sending loss transaction...')
+        
+        const txId = await sendLossTransaction(LOSS_ADDRESS, bet, connectedWallet)
+        if (txId) {
+          transactionId = txId
+          showNotification(`You lost ${bet} ARK. Better luck next time!`, 'error')
+        } else {
+          throw new Error('Failed to process loss transaction')
+        }
+      }
+
+      const gameResult: GameResult = {
+        betAmount: bet,
+        multiplier,
+        payout: isWin ? payout : 0,
+        isWin,
+        transactionId,
+        timestamp: Date.now()
+      }
+
+      setGameHistory(prev => [gameResult, ...prev.slice(0, 9)])
+      
+      if (window.arkconnect) {
+        const freshBalance = await window.arkconnect.getBalance()
+        await handleBalanceUpdate(freshBalance)
+      }
+
+    } catch (error: any) {
+      console.error('Transaction error:', error)
+      showNotification(`Transaction failed: ${error.message}`, 'error')
+    }
+  }
+
+  const playGame = () => {
+    if (!connectedWallet) {
+      showNotification('Please connect your ARK wallet first', 'error')
+      return
+    }
+
+    const bet = parseFloat(betAmount)
+    if (isNaN(bet) || bet < 0.0001) {
+      showNotification('Minimum bet is 0.0001 ARK', 'error')
+      return
+    }
+
+    if (bet > 5) {
+      showNotification('Maximum bet is 5 ARK', 'error')
+      return
+    }
+
+    const walletBalance = parseFloat(connectedWallet.balance)
+    if (walletBalance < bet + ARK_TRANSACTION_FEE) {
+      showNotification('Insufficient balance for bet + transaction fee', 'error')
+      return
+    }
+
+    setIsPlaying(true)
+    setTriggerDrop(true)
+    showNotification(`Bet placed: ${bet} ARK`)
+  }
+
+  const handleTriggerComplete = () => {
+    setTriggerDrop(false)
+  }
+
+  interface Window {
+    arkconnect?: {
+      connect: () => Promise<any>;
+      disconnect: () => Promise<void>;
+      getAddress: () => Promise<string>;
+      getBalance: () => Promise<string>;
+      isConnected: () => Promise<boolean>;
+      getNetwork: () => Promise<string>;
+      signTransaction: (request: any) => Promise<any>;
+      signMessage: (request: any) => Promise<any>;
+      request: (method: string, params?: any) => Promise<any>;
+      version: () => string;
+    };
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">ARKlinko</h1>
+          <p className="text-blue-200">Real ARK blockchain Plinko game</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex justify-center">
+                <PlinkoCanvas 
+                  onBallLanded={handleBallLanded}
+                  triggerDrop={triggerDrop}
+                  onTriggerComplete={handleTriggerComplete}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-1 space-y-6">
+            <ArkConnect 
+              onWalletConnected={handleWalletConnected}
+              onDisconnect={handleDisconnect}
+              connectedWallet={connectedWallet}
+              onBalanceUpdate={handleBalanceUpdate}
+            />
+
+            <div className="bg-white rounded-lg shadow-md">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <span className="text-green-600">🎮</span>
+                  Game Controls
+                </h3>
+              </div>
+              <div className="p-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Bet Amount (ARK)
+                  </label>
+                  <input
+                    type="number"
+                    value={betAmount}
+                    onChange={(e) => setBetAmount(e.target.value)}
+                    min="0.0001"
+                    max="5"
+                    step="0.0001"
+                    disabled={isPlaying}
+                    className="w-full px-3 py-2 border border-gray-300 rounded font-mono"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Min: 0.0001 ARK, Max: 5 ARK
+                  </p>
+                </div>
+
+                <button 
+                  onClick={playGame}
+                  disabled={!connectedWallet || isPlaying}
+                  className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded text-lg font-semibold"
+                >
+                  {isPlaying ? 'Ball Dropping...' : 'Drop Ball'}
+                </button>
+
+                <div className="text-xs text-gray-500 space-y-1">
+                  <p>• Transaction fee: {ARK_TRANSACTION_FEE} ARK</p>
+                  <p>• Losses sent to: {LOSS_ADDRESS.substring(0, 20)}...</p>
+                  <p>• Winnings sent directly to your wallet</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-md">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <span className="text-orange-600">🕐</span>
+                  Recent Games
+                </h3>
+              </div>
+              <div className="p-4">
+                {gameHistory.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">No games played yet</p>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {gameHistory.map((game, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xl ${game.isWin ? 'text-green-600' : 'text-red-600'}`}>
+                            {game.isWin ? '📈' : '📉'}
+                          </span>
+                          <div>
+                            <p className="font-medium">
+                              {game.multiplier}x multiplier
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Bet: {game.betAmount} ARK
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className={`inline-block px-2 py-1 rounded text-sm font-semibold ${
+                            game.isWin 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {game.isWin ? `+${game.payout.toFixed(4)}` : `-${game.betAmount}`} ARK
+                          </span>
+                          {game.transactionId && (
+                            <p className="text-xs text-gray-500 mt-1 font-mono">
+                              TX: {game.transactionId.substring(0, 10)}...
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default App
