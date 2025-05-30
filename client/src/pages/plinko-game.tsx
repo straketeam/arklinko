@@ -297,7 +297,7 @@ function PlinkoCanvas({
   )
 }
 
-// ARK Connect with detailed debugging and real-time balance updates
+// ARK Connect with proper API implementation
 function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanceUpdate }: {
   onWalletConnected: (wallet: ArkWallet) => void
   onDisconnect: () => void
@@ -347,106 +347,64 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
     try {
       console.log('Attempting ARK Connect...')
       
+      // Check if already connected first
+      try {
+        const isConnected = await window.arkconnect.isConnected()
+        console.log('Is already connected:', isConnected)
+        
+        if (isConnected) {
+          console.log('Already connected, getting wallet info...')
+          const address = await window.arkconnect.getAddress()
+          const balance = await window.arkconnect.getBalance()
+          const arkBalance = (parseFloat(balance) / 100000000).toString()
+          
+          const wallet: ArkWallet = {
+            address: address,
+            publicKey: '',
+            balance: arkBalance
+          }
+          
+          onWalletConnected(wallet)
+          showNotification(`Connected to ${address.substring(0, 10)}...`)
+          return
+        }
+      } catch (checkError) {
+        console.log('Error checking existing connection:', checkError)
+      }
+      
+      // Attempt new connection
       const result = await window.arkconnect.connect()
       console.log('ARK Connect result:', result)
       console.log('Result type:', typeof result)
       console.log('Result properties:', result ? Object.keys(result) : 'null')
       
-      // Check if connection was successful but we need to get account data
+      // Check if connection was successful
       if (result && typeof result === 'object' && result.status === 'success') {
         console.log('Connection successful, now getting account data...')
-        console.log('Available ARK Connect methods:', Object.getOwnPropertyNames(window.arkconnect))
         
-        // Try to get the actual wallet address using ARK Connect API
+        // Use the correct ARK Connect API methods
         try {
-          // Method 1: Try using the api() method from ARK Connect docs
-          if ((window.arkconnect as any).api) {
-            try {
-              console.log('Trying arkconnect.api()...')
-              const api = (window.arkconnect as any).api()
-              console.log('API instance:', api)
-              console.log('API methods:', Object.getOwnPropertyNames(api))
-              
-              if (api.wallet && api.wallet.primaryAddress) {
-                console.log('Getting primary address...')
-                const address = await api.wallet.primaryAddress()
-                console.log('Primary address:', address)
-                
-                if (address) {
-                  const balance = await window.arkconnect.getBalance(address)
-                  const arkBalance = (parseFloat(balance) / 100000000).toString()
-                  
-                  const wallet: ArkWallet = {
-                    address: address,
-                    publicKey: '',
-                    balance: arkBalance
-                  }
-                  
-                  onWalletConnected(wallet)
-                  showNotification(`Connected to ${address.substring(0, 10)}...`)
-                  return
-                }
-              }
-            } catch (e) {
-              console.log('api() method failed:', e)
-            }
-          }
+          console.log('Getting address using getAddress()...')
+          const address = await window.arkconnect.getAddress()
+          console.log('Address from getAddress():', address)
           
-          // Method 2: Try wallet() method if available
-          if ((window.arkconnect as any).wallet) {
-            try {
-              console.log('Trying arkconnect.wallet()...')
-              const wallet = (window.arkconnect as any).wallet()
-              console.log('Wallet instance:', wallet)
-              
-              if (wallet && wallet.primaryAddress) {
-                const address = await wallet.primaryAddress()
-                console.log('Wallet primary address:', address)
-                
-                if (address) {
-                  const balance = await window.arkconnect.getBalance(address)
-                  const arkBalance = (parseFloat(balance) / 100000000).toString()
-                  
-                  const walletData: ArkWallet = {
-                    address: address,
-                    publicKey: '',
-                    balance: arkBalance
-                  }
-                  
-                  onWalletConnected(walletData)
-                  showNotification(`Connected to ${address.substring(0, 10)}...`)
-                  return
-                }
-              }
-            } catch (e) {
-              console.log('wallet() method failed:', e)
+          if (address) {
+            console.log('Getting balance using getBalance()...')
+            const balance = await window.arkconnect.getBalance()
+            console.log('Balance from getBalance():', balance)
+            
+            // Convert balance from arktoshi to ARK (divide by 100,000,000)
+            const arkBalance = (parseFloat(balance) / 100000000).toString()
+            
+            const wallet: ArkWallet = {
+              address: address,
+              publicKey: '',
+              balance: arkBalance
             }
-          }
-          
-          // Method 3: Try request method for wallet info
-          if (window.arkconnect.request) {
-            try {
-              console.log('Trying request("wallet_primaryAddress")...')
-              const address = await window.arkconnect.request('wallet_primaryAddress')
-              console.log('Address via request:', address)
-              
-              if (address) {
-                const balance = await window.arkconnect.getBalance(address)
-                const arkBalance = (parseFloat(balance) / 100000000).toString()
-                
-                const wallet: ArkWallet = {
-                  address: address,
-                  publicKey: '',
-                  balance: arkBalance
-                }
-                
-                onWalletConnected(wallet)
-                showNotification(`Connected to ${address.substring(0, 10)}...`)
-                return
-              }
-            } catch (e) {
-              console.log('request("wallet_primaryAddress") failed:', e)
-            }
+            
+            onWalletConnected(wallet)
+            showNotification(`Connected to ${address.substring(0, 10)}...`)
+            return
           }
           
           throw new Error('Could not retrieve wallet address after successful connection')
@@ -456,41 +414,22 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
         }
       }
       
-      // Check if result is an error object with "already connected"
+      // Handle error responses
       if (result && typeof result === 'object' && result.status === 'failed') {
         if (result.message?.includes('already connected')) {
-          showNotification('Domain already connected but cannot access wallet data. Please refresh the page and try again.', 'error')
+          showNotification('Domain already connected. Please refresh the page and try again.', 'error')
           return
         }
         throw new Error(result.message || 'ARK Connect failed')
       }
       
+      // Handle direct address return (fallback)
       let address = ''
-      let publicKey = ''
       
       if (typeof result === 'string') {
         address = result
       } else if (result && typeof result === 'object') {
-        // Try multiple possible property names
         address = result.address || result.walletAddress || result.account || result.wallet || ''
-        publicKey = result.publicKey || result.pubKey || result.public_key || ''
-        
-        // Log what we found
-        console.log('Extracted address:', address)
-        console.log('Extracted publicKey:', publicKey)
-        
-        // If still no address, check all properties
-        if (!address) {
-          console.log('No address found, checking all properties:')
-          Object.entries(result).forEach(([key, value]) => {
-            console.log(`  ${key}:`, value, `(type: ${typeof value})`)
-            // Look for string values that could be addresses (ARK addresses are typically 34 characters)
-            if (typeof value === 'string' && value.length >= 30 && value.length <= 40) {
-              console.log(`  Potential address found in ${key}:`, value)
-              if (!address) address = value
-            }
-          })
-        }
       }
       
       if (!address) {
@@ -498,17 +437,14 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
         throw new Error(`No wallet address found in ARK Connect response: ${resultInfo}`)
       }
       
-      // Get initial balance from ARK Connect
-      const balance = await window.arkconnect.getBalance(address)
+      // Get balance and create wallet object
+      const balance = await window.arkconnect.getBalance()
       const arkBalance = (parseFloat(balance) / 100000000).toString()
-      
-      // Get real-time balance from API
-      const realTimeBalance = await fetchRealTimeBalance(address)
       
       const wallet: ArkWallet = {
         address: address,
-        publicKey: publicKey,
-        balance: realTimeBalance || arkBalance
+        publicKey: '',
+        balance: arkBalance
       }
       
       onWalletConnected(wallet)
@@ -597,7 +533,7 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
   )
 }
 
-// Main ARKlinko Game Component with enhanced balance handling
+// Main ARKlinko Game Component
 export default function ARKlinko() {
   const [wallet, setWallet] = useState<ArkWallet | null>(null)
   const [betAmount, setBetAmount] = useState('')
@@ -832,7 +768,6 @@ export default function ARKlinko() {
                       <span style={{ color: game.isWin ? '#22c55e' : '#ef4444' }}>
                         {game.isWin ? `Won ${game.payout} ARK` : `Lost ${game.betAmount} ARK`}
                       </span>
-                      <span>Multiplier: {game.multiplier}x</span>
                     </div>
                   ))}
                 </div>
@@ -840,10 +775,20 @@ export default function ARKlinko() {
             )}
           </div>
         ) : (
-          <div style={{ textAlign: 'center', padding: '80px 0' }}>
-            <h2 style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '16px' }}>Welcome to ARKlinko</h2>
-            <p style={{ fontSize: '20px', color: '#9ca3af', marginBottom: '32px' }}>
-              Connect your ARK wallet to start playing with real cryptocurrency
+          <div style={{ 
+            backgroundColor: '#1f2937', 
+            padding: '48px', 
+            borderRadius: '8px', 
+            textAlign: 'center' 
+          }}>
+            <h2 style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '16px' }}>
+              Welcome to ARKlinko!
+            </h2>
+            <p style={{ fontSize: '18px', color: '#9ca3af', marginBottom: '32px' }}>
+              Connect your ARK wallet to start playing the most exciting blockchain Plinko game.
+            </p>
+            <p style={{ color: '#6b7280' }}>
+              Minimum bet: {MIN_BET} ARK • Maximum bet: {MAX_BET} ARK
             </p>
           </div>
         )}
@@ -857,9 +802,13 @@ declare global {
     arkconnect?: {
       connect: () => Promise<any>;
       disconnect: () => Promise<void>;
-      getBalance: (address: string) => Promise<string>;
-      isConnected: () => boolean;
-      request: (method: string, params?: any) => Promise<any>;
+      getAddress: () => Promise<string>;
+      getBalance: () => Promise<string>;
+      isConnected: () => Promise<boolean>;
+      getNetwork: () => Promise<string>;
+      signTransaction: (request: any) => Promise<any>;
+      signMessage: (request: any) => Promise<any>;
+      version: () => string;
     };
   }
 }
