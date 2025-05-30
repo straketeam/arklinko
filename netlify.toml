@@ -1,5 +1,5 @@
 [build]
-  command = "npm install && cd client && npx vite build --outDir ../dist/public"
+  command = "npm install && cd client && npx vite build --emptyOutDir"
   publish = "dist/public"
 
 [build.environment]
