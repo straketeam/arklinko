@@ -580,7 +580,9 @@ export default function ARKlinkoBlockchain() {
       setGameHistory(prev => [gameResult, ...prev.slice(0, 9)]) // Keep last 10 results
       
       // Refresh wallet balance
-      await handleBalanceUpdate(await window.arkconnect.getBalance())
+      if (window.arkconnect) {
+        await handleBalanceUpdate(await window.arkconnect.getBalance())
+      }
 
     } catch (error: any) {
       console.error('Winning transaction error:', error)
