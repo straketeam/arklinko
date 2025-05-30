@@ -462,7 +462,7 @@ async function sendWinningTransaction(recipientAddress: string, amount: number):
   try {
     console.log('Sending winning transaction via server:', { recipientAddress, amount })
     
-    const response = await fetch('/api/game/send-winnings', {
+    const response = await fetch('/api/send-winnings', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
