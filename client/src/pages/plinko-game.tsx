@@ -348,9 +348,9 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
       console.log('Attempting ARK Connect...')
       
       // Check if already connected and get existing account
-      if (window.arkconnect.getAccount) {
+      if ((window.arkconnect as any).getAccount) {
         try {
-          const existingAccount = await window.arkconnect.getAccount()
+          const existingAccount = await (window.arkconnect as any).getAccount()
           console.log('Existing account check:', existingAccount)
           
           if (existingAccount && existingAccount.address) {
@@ -381,10 +381,14 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
       // Check if result is an error object with "already connected"
       if (result && typeof result === 'object' && result.status === 'failed') {
         if (result.message?.includes('already connected')) {
-          // Try to get the account data directly since it's already connected
-          if (window.arkconnect.getAccount) {
+          // Domain is already connected, try multiple ways to get account data
+          console.log('Domain already connected, trying to get account data...')
+          
+          // Method 1: Try getAccount
+          if ((window.arkconnect as any).getAccount) {
             try {
-              const account = await window.arkconnect.getAccount()
+              const account = await (window.arkconnect as any).getAccount()
+              console.log('getAccount result:', account)
               if (account && account.address) {
                 const balance = await window.arkconnect.getBalance(account.address)
                 const arkBalance = (parseFloat(balance) / 100000000).toString()
@@ -400,9 +404,43 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
                 return
               }
             } catch (accountError) {
-              console.error('Failed to get account after already connected:', accountError)
+              console.error('getAccount failed:', accountError)
             }
           }
+          
+          // Method 2: Try using request method to get accounts
+          if (window.arkconnect.request) {
+            try {
+              const accounts = await window.arkconnect.request('accounts')
+              console.log('request accounts result:', accounts)
+              if (accounts && accounts.length > 0) {
+                const account = accounts[0]
+                const balance = await window.arkconnect.getBalance(account.address)
+                const arkBalance = (parseFloat(balance) / 100000000).toString()
+                
+                const wallet: ArkWallet = {
+                  address: account.address,
+                  publicKey: account.publicKey || '',
+                  balance: arkBalance
+                }
+                
+                onWalletConnected(wallet)
+                showNotification(`Connected to ${account.address.substring(0, 10)}...`)
+                return
+              }
+            } catch (requestError) {
+              console.error('request accounts failed:', requestError)
+            }
+          }
+          
+          // Method 3: Check if there's an isConnected method that gives us info
+          if (window.arkconnect.isConnected && window.arkconnect.isConnected()) {
+            showNotification('Wallet is connected but cannot retrieve account data. Please disconnect and reconnect.', 'error')
+            return
+          }
+          
+          showNotification('Domain already connected but cannot access wallet data. Please refresh the page and try again.', 'error')
+          return
         }
         throw new Error(result.message || 'ARK Connect failed')
       }
@@ -799,7 +837,6 @@ declare global {
     arkconnect?: {
       connect: () => Promise<any>;
       disconnect: () => Promise<void>;
-      getAccount: () => Promise<{ address: string; publicKey: string } | null>;
       getBalance: (address: string) => Promise<string>;
       isConnected: () => boolean;
       request: (method: string, params?: any) => Promise<any>;
