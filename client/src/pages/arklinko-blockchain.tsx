@@ -148,12 +148,10 @@ const sendArkTransaction = async (
     
     console.log('Sending real ARK transaction:', { toAddress, amount, amountInArktoshi })
 
-    // ARK Connect expects fee in ARK units (not arktoshi) and must be ≤ 1
+    // Try string format for amount and remove optional fields
     const txData = {
       recipientId: toAddress,
-      amount: amountInArktoshi,
-      fee: 0.006, // Fee in ARK units, must be ≤ 1
-      vendorField: `ARKlinko ${amount} ARK`
+      amount: amountInArktoshi.toString()
     }
     
     console.log('ARK Connect transaction data:', txData)
