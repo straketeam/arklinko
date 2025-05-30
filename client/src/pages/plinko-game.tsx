@@ -347,32 +347,6 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
     try {
       console.log('Attempting ARK Connect...')
       
-      // Check if already connected and get existing account
-      if ((window.arkconnect as any).getAccount) {
-        try {
-          const existingAccount = await (window.arkconnect as any).getAccount()
-          console.log('Existing account check:', existingAccount)
-          
-          if (existingAccount && existingAccount.address) {
-            console.log('Found existing connection, using it')
-            const balance = await window.arkconnect.getBalance(existingAccount.address)
-            const arkBalance = (parseFloat(balance) / 100000000).toString()
-            
-            const wallet: ArkWallet = {
-              address: existingAccount.address,
-              publicKey: existingAccount.publicKey || '',
-              balance: arkBalance
-            }
-            
-            onWalletConnected(wallet)
-            showNotification(`Connected to ${existingAccount.address.substring(0, 10)}...`)
-            return
-          }
-        } catch (getAccountError) {
-          console.log('No existing account found:', getAccountError)
-        }
-      }
-      
       const result = await window.arkconnect.connect()
       console.log('ARK Connect result:', result)
       console.log('Result type:', typeof result)
@@ -383,104 +357,95 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
         console.log('Connection successful, now getting account data...')
         console.log('Available ARK Connect methods:', Object.getOwnPropertyNames(window.arkconnect))
         
-        // Try to get the actual wallet address using different methods
+        // Try to get the actual wallet address using ARK Connect API
         try {
-          // Method 1: Try request with different parameters
-          if (window.arkconnect.request) {
+          // Method 1: Try using the api() method from ARK Connect docs
+          if ((window.arkconnect as any).api) {
             try {
-              console.log('Trying request("account")...')
-              const account = await window.arkconnect.request('account')
-              console.log('Account via request(account):', account)
+              console.log('Trying arkconnect.api()...')
+              const api = (window.arkconnect as any).api()
+              console.log('API instance:', api)
+              console.log('API methods:', Object.getOwnPropertyNames(api))
               
-              if (account && account.address) {
-                const balance = await window.arkconnect.getBalance(account.address)
-                const arkBalance = (parseFloat(balance) / 100000000).toString()
+              if (api.wallet && api.wallet.primaryAddress) {
+                console.log('Getting primary address...')
+                const address = await api.wallet.primaryAddress()
+                console.log('Primary address:', address)
                 
-                const wallet: ArkWallet = {
-                  address: account.address,
-                  publicKey: account.publicKey || '',
-                  balance: arkBalance
+                if (address) {
+                  const balance = await window.arkconnect.getBalance(address)
+                  const arkBalance = (parseFloat(balance) / 100000000).toString()
+                  
+                  const wallet: ArkWallet = {
+                    address: address,
+                    publicKey: '',
+                    balance: arkBalance
+                  }
+                  
+                  onWalletConnected(wallet)
+                  showNotification(`Connected to ${address.substring(0, 10)}...`)
+                  return
                 }
-                
-                onWalletConnected(wallet)
-                showNotification(`Connected to ${account.address.substring(0, 10)}...`)
-                return
               }
             } catch (e) {
-              console.log('request("account") failed:', e)
-            }
-            
-            try {
-              console.log('Trying request("accounts")...')
-              const accounts = await window.arkconnect.request('accounts')
-              console.log('Accounts via request(accounts):', accounts)
-              
-              if (accounts && accounts.length > 0) {
-                const account = accounts[0]
-                const balance = await window.arkconnect.getBalance(account.address)
-                const arkBalance = (parseFloat(balance) / 100000000).toString()
-                
-                const wallet: ArkWallet = {
-                  address: account.address,
-                  publicKey: account.publicKey || '',
-                  balance: arkBalance
-                }
-                
-                onWalletConnected(wallet)
-                showNotification(`Connected to ${account.address.substring(0, 10)}...`)
-                return
-              }
-            } catch (e) {
-              console.log('request("accounts") failed:', e)
-            }
-            
-            try {
-              console.log('Trying request("getAccount")...')
-              const account = await window.arkconnect.request('getAccount')
-              console.log('Account via request(getAccount):', account)
-              
-              if (account && account.address) {
-                const balance = await window.arkconnect.getBalance(account.address)
-                const arkBalance = (parseFloat(balance) / 100000000).toString()
-                
-                const wallet: ArkWallet = {
-                  address: account.address,
-                  publicKey: account.publicKey || '',
-                  balance: arkBalance
-                }
-                
-                onWalletConnected(wallet)
-                showNotification(`Connected to ${account.address.substring(0, 10)}...`)
-                return
-              }
-            } catch (e) {
-              console.log('request("getAccount") failed:', e)
+              console.log('api() method failed:', e)
             }
           }
           
-          // Method 2: Try direct getAccount if available
-          if ((window.arkconnect as any).getAccount) {
+          // Method 2: Try wallet() method if available
+          if ((window.arkconnect as any).wallet) {
             try {
-              console.log('Trying getAccount()...')
-              const account = await (window.arkconnect as any).getAccount()
-              console.log('Account via getAccount():', account)
+              console.log('Trying arkconnect.wallet()...')
+              const wallet = (window.arkconnect as any).wallet()
+              console.log('Wallet instance:', wallet)
               
-              if (account && account.address) {
-                const balance = await window.arkconnect.getBalance(account.address)
+              if (wallet && wallet.primaryAddress) {
+                const address = await wallet.primaryAddress()
+                console.log('Wallet primary address:', address)
+                
+                if (address) {
+                  const balance = await window.arkconnect.getBalance(address)
+                  const arkBalance = (parseFloat(balance) / 100000000).toString()
+                  
+                  const walletData: ArkWallet = {
+                    address: address,
+                    publicKey: '',
+                    balance: arkBalance
+                  }
+                  
+                  onWalletConnected(walletData)
+                  showNotification(`Connected to ${address.substring(0, 10)}...`)
+                  return
+                }
+              }
+            } catch (e) {
+              console.log('wallet() method failed:', e)
+            }
+          }
+          
+          // Method 3: Try request method for wallet info
+          if (window.arkconnect.request) {
+            try {
+              console.log('Trying request("wallet_primaryAddress")...')
+              const address = await window.arkconnect.request('wallet_primaryAddress')
+              console.log('Address via request:', address)
+              
+              if (address) {
+                const balance = await window.arkconnect.getBalance(address)
                 const arkBalance = (parseFloat(balance) / 100000000).toString()
                 
                 const wallet: ArkWallet = {
-                  address: account.address,
-                  publicKey: account.publicKey || '',
+                  address: address,
+                  publicKey: '',
                   balance: arkBalance
                 }
                 
                 onWalletConnected(wallet)
-                showNotification(`Connected to ${account.address.substring(0, 10)}...`)
+                showNotification(`Connected to ${address.substring(0, 10)}...`)
                 return
               }
             } catch (e) {
-              console.log('getAccount() failed:', e)
+              console.log('request("wallet_primaryAddress") failed:', e)
             }
           }
           
@@ -494,64 +459,6 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
       // Check if result is an error object with "already connected"
       if (result && typeof result === 'object' && result.status === 'failed') {
         if (result.message?.includes('already connected')) {
-          // Domain is already connected, try multiple ways to get account data
-          console.log('Domain already connected, trying to get account data...')
-          
-          // Method 1: Try getAccount
-          if ((window.arkconnect as any).getAccount) {
-            try {
-              const account = await (window.arkconnect as any).getAccount()
-              console.log('getAccount result:', account)
-              if (account && account.address) {
-                const balance = await window.arkconnect.getBalance(account.address)
-                const arkBalance = (parseFloat(balance) / 100000000).toString()
-                
-                const wallet: ArkWallet = {
-                  address: account.address,
-                  publicKey: account.publicKey || '',
-                  balance: arkBalance
-                }
-                
-                onWalletConnected(wallet)
-                showNotification(`Connected to ${account.address.substring(0, 10)}...`)
-                return
-              }
-            } catch (accountError) {
-              console.error('getAccount failed:', accountError)
-            }
-          }
-          
-          // Method 2: Try using request method to get accounts
-          if (window.arkconnect.request) {
-            try {
-              const accounts = await window.arkconnect.request('accounts')
-              console.log('request accounts result:', accounts)
-              if (accounts && accounts.length > 0) {
-                const account = accounts[0]
-                const balance = await window.arkconnect.getBalance(account.address)
-                const arkBalance = (parseFloat(balance) / 100000000).toString()
-                
-                const wallet: ArkWallet = {
-                  address: account.address,
-                  publicKey: account.publicKey || '',
-                  balance: arkBalance
-                }
-                
-                onWalletConnected(wallet)
-                showNotification(`Connected to ${account.address.substring(0, 10)}...`)
-                return
-              }
-            } catch (requestError) {
-              console.error('request accounts failed:', requestError)
-            }
-          }
-          
-          // Method 3: Check if there's an isConnected method that gives us info
-          if (window.arkconnect.isConnected && window.arkconnect.isConnected()) {
-            showNotification('Wallet is connected but cannot retrieve account data. Please disconnect and reconnect.', 'error')
-            return
-          }
-          
           showNotification('Domain already connected but cannot access wallet data. Please refresh the page and try again.', 'error')
           return
         }
