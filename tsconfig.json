@@ -15,12 +15,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
     "paths": {
       "@/*": ["./client/src/*"],
-      "@shared/*": ["./shared/*"],
-      "@assets/*": ["./attached_assets/*"]
+      "@shared/*": ["./shared/*"]
     }
   },
-  "include": ["client/src", "shared", "index.html"],
+  "include": ["client/src", "shared"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
