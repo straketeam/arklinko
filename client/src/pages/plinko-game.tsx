@@ -378,6 +378,61 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
       console.log('Result type:', typeof result)
       console.log('Result properties:', result ? Object.keys(result) : 'null')
       
+      // Check if connection was successful but we need to get account data
+      if (result && typeof result === 'object' && result.status === 'success') {
+        console.log('Connection successful, now getting account data...')
+        
+        // Try to get the actual wallet address
+        try {
+          if ((window.arkconnect as any).getAccount) {
+            const account = await (window.arkconnect as any).getAccount()
+            console.log('Account data:', account)
+            
+            if (account && account.address) {
+              const balance = await window.arkconnect.getBalance(account.address)
+              const arkBalance = (parseFloat(balance) / 100000000).toString()
+              
+              const wallet: ArkWallet = {
+                address: account.address,
+                publicKey: account.publicKey || '',
+                balance: arkBalance
+              }
+              
+              onWalletConnected(wallet)
+              showNotification(`Connected to ${account.address.substring(0, 10)}...`)
+              return
+            }
+          }
+          
+          // Try using request method to get accounts
+          if (window.arkconnect.request) {
+            const accounts = await window.arkconnect.request('accounts')
+            console.log('Accounts via request:', accounts)
+            
+            if (accounts && accounts.length > 0) {
+              const account = accounts[0]
+              const balance = await window.arkconnect.getBalance(account.address)
+              const arkBalance = (parseFloat(balance) / 100000000).toString()
+              
+              const wallet: ArkWallet = {
+                address: account.address,
+                publicKey: account.publicKey || '',
+                balance: arkBalance
+              }
+              
+              onWalletConnected(wallet)
+              showNotification(`Connected to ${account.address.substring(0, 10)}...`)
+              return
+            }
+          }
+          
+          throw new Error('Could not retrieve wallet address after successful connection')
+        } catch (accountError) {
+          console.error('Failed to get account after successful connection:', accountError)
+          throw new Error('Connected successfully but could not retrieve wallet data')
+        }
+      }
+      
       // Check if result is an error object with "already connected"
       if (result && typeof result === 'object' && result.status === 'failed') {
         if (result.message?.includes('already connected')) {
