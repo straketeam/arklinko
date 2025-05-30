@@ -95,7 +95,7 @@ const sendWinningTransaction = async (
   amount: number
 ): Promise<string | null> => {
   try {
-    // Try to use server endpoint first
+    // Use server endpoint for real winning transactions
     const response = await fetch('/api/game/send-winnings', {
       method: 'POST',
       headers: {
@@ -110,30 +110,19 @@ const sendWinningTransaction = async (
     if (response.ok) {
       const result = await response.json()
       if (result.success && result.transactionId) {
+        showNotification(`Won ${amount.toFixed(4)} ARK! TX: ${result.transactionId.substring(0, 10)}...`)
         return result.transactionId
+      } else {
+        throw new Error(result.message || 'Server transaction failed')
       }
+    } else {
+      throw new Error(`Server error: ${response.status}`)
     }
-    
-    // If server endpoint fails (like on static deployments), simulate winning
-    console.log('Server endpoint not available, simulating winning transaction')
-    showNotification(`🎉 Congratulations! You won ${amount.toFixed(4)} ARK!`, 'success')
-    showNotification(`In a real deployment, ${amount.toFixed(4)} ARK would be sent to ${toAddress}`)
-    
-    // Return a simulated transaction ID for demo purposes
-    const simulatedTxId = 'win_tx_' + Date.now().toString(16)
-    console.log('Simulated winning transaction ID:', simulatedTxId)
-    return simulatedTxId
     
   } catch (error: any) {
     console.error('Winning transaction error:', error)
-    
-    // Fallback to simulation
-    console.log('Using fallback simulation for winning transaction')
-    showNotification(`🎉 You won ${amount.toFixed(4)} ARK!`, 'success')
-    showNotification(`Demo mode: Real deployment would send ${amount.toFixed(4)} ARK to your wallet`)
-    
-    const simulatedTxId = 'demo_win_' + Date.now().toString(16)
-    return simulatedTxId
+    showNotification(`Winning transaction failed: ${error.message}`, 'error')
+    return null
   }
 }
 
@@ -147,44 +136,54 @@ const sendArkTransaction = async (
       throw new Error('ARK Connect not available')
     }
 
-    // Convert ARK amount to arktoshi (ARK uses 8 decimal places)
+    const balance = parseFloat(wallet.balance)
+    const totalRequired = amount + ARK_TRANSACTION_FEE
+    
+    if (balance < totalRequired) {
+      throw new Error('Insufficient ARK balance for transaction + fees')
+    }
+
+    // Convert ARK amount to arktoshi
     const amountInArktoshi = Math.floor(amount * 100000000)
+    
+    console.log('Sending real ARK transaction:', { toAddress, amount, amountInArktoshi })
 
-    console.log('Sending ARK transaction:', { toAddress, amount, amountInArktoshi })
-
-    // Use ARK Connect signTransaction method with correct structure
-    // The function adds type: "transfer" automatically and expects fee in ARK (not arktoshi)
-    const transactionRequest = {
-      amount: amountInArktoshi,
-      fee: 0.006, // Fee in ARK units (not arktoshi) - must be ≤ 1 ARK
+    // Try the exact ARK Connect format based on their TypeScript definitions
+    const txData = {
       recipientId: toAddress,
-      vendorField: `ARKlinko game ${amount} ARK`
-    }
-
-    console.log('Transaction request:', transactionRequest)
-
-    const result = await window.arkconnect.signTransaction(transactionRequest)
-    console.log('ARK Connect transaction result:', result)
-    
-    if (result && result.status === 'success' && result.data) {
-      const txId = result.data.id || result.data.transactionId
-      console.log('Transaction sent successfully:', txId)
-      return txId
-    } else if (result && result.status === 'failed') {
-      throw new Error(result.message || 'Transaction was rejected by user')
+      amount: amountInArktoshi,
+      fee: 600000,
+      vendorField: `ARKlinko ${amount} ARK`
     }
     
-    throw new Error('Transaction failed - unexpected response format')
+    console.log('ARK Connect transaction data:', txData)
+
+    const result = await window.arkconnect.signTransaction(txData)
+    console.log('ARK Connect result:', result)
+    
+    if (result && result.status === 'success') {
+      const txId = result.data?.id || result.data?.transactionId || result.transactionId
+      if (txId) {
+        showNotification(`Transaction sent! TX: ${txId.substring(0, 10)}...`)
+        return txId
+      }
+    }
+    
+    if (result && result.status === 'failed') {
+      throw new Error(result.message || 'Transaction failed')
+    }
+    
+    throw new Error('Transaction failed - no transaction ID returned')
+    
   } catch (error: any) {
-    console.error('Transaction error:', error)
+    console.error('ARK transaction error:', error)
     
-    // Check for specific ARK Connect error types
     if (error.message && error.message.includes('rejected')) {
-      showNotification('Transaction was cancelled by user', 'error')
+      showNotification('Transaction cancelled by user', 'error')
     } else if (error.message && error.message.includes('insufficient')) {
-      showNotification('Insufficient ARK balance for transaction', 'error')
+      showNotification('Insufficient ARK balance', 'error')
     } else {
-      showNotification(`Transaction failed: ${error.message}`, 'error')
+      showNotification(`Transaction error: ${error.message}`, 'error')
     }
     
     return null
