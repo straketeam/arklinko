@@ -96,7 +96,6 @@ const sendWinningTransaction = async (
   amount: number
 ): Promise<string | null> => {
   try {
-    // Try to use server endpoint first
     const response = await fetch('/api/send-winnings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -110,24 +109,7 @@ const sendWinningTransaction = async (
       const data = await response.json()
       return data.transactionId
     } else {
-      console.log('Server endpoint not available, using serverless function')
-      
-      // Fallback to serverless function
-      const netlifyResponse = await fetch('/.netlify/functions/send-winnings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          recipientAddress: toAddress,
-          amount: amount
-        })
-      })
-      
-      if (netlifyResponse.ok) {
-        const data = await netlifyResponse.json()
-        return data.transactionId
-      } else {
-        throw new Error('Failed to send winning transaction')
-      }
+      throw new Error('Failed to send winning transaction')
     }
   } catch (error) {
     console.error('Error sending winning transaction:', error)
@@ -424,26 +406,39 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
 
       console.log('ARK Connect found, checking for existing connection...')
 
-      // Check if already connected first
-      let isConnected = false
-      try {
-        isConnected = await window.arkconnect.isConnected()
-      } catch (error) {
-        console.log('Error checking connection status, proceeding with connect')
+      // Use the connect method directly
+      const connectResult = await window.arkconnect.connect()
+      console.log('Connection result:', connectResult)
+
+      let address: string = ''
+
+      // Handle different response formats from ARK Connect
+      if (typeof connectResult === 'string') {
+        address = connectResult
+      } else if (connectResult && typeof connectResult === 'object') {
+        // Try multiple possible property names
+        address = connectResult.address || 
+                 connectResult.account || 
+                 connectResult.walletAddress || 
+                 connectResult.data?.address || 
+                 ''
       }
 
-      let address: string
-      if (isConnected) {
-        console.log('Already connected, getting address...')
-        address = await window.arkconnect.getAddress()
-      } else {
-        console.log('No existing account found, requesting connection...')
-        const connectResult = await window.arkconnect.connect()
-        address = connectResult.address || connectResult
-      }
-
+      // Get address using getAddress method if connect didn't return it
       if (!address) {
-        throw new Error('Failed to get wallet address')
+        try {
+          const addressResult = await window.arkconnect.getAddress()
+          address = typeof addressResult === 'string' ? addressResult : 
+                   (addressResult?.address || addressResult?.data?.address || '')
+        } catch (getAddressError) {
+          console.error('Error getting address:', getAddressError)
+        }
+      }
+
+      // Final validation
+      if (!address || typeof address !== 'string' || address.length < 30) {
+        console.error('Invalid address received:', address)
+        throw new Error('Failed to get valid wallet address from ARK Connect')
       }
 
       console.log('Connected to address:', address)
@@ -452,7 +447,7 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
       const wallet: ArkWallet = {
         address,
         balance,
-        publicKey: '' // We'll get this if needed later
+        publicKey: ''
       }
 
       onWalletConnected(wallet)
@@ -494,7 +489,9 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
               Wallet Connected
             </div>
             <div style={{ fontSize: '14px', color: '#9ca3af', marginBottom: '4px' }}>
-              Address: {connectedWallet.address.slice(0, 10)}...{connectedWallet.address.slice(-6)}
+              Address: {typeof connectedWallet.address === 'string' ? 
+                connectedWallet.address.slice(0, 10) + '...' + connectedWallet.address.slice(-6) : 
+                'Invalid Address'}
             </div>
             <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#22c55e' }}>
               Balance: {parseFloat(connectedWallet.balance).toFixed(4)} ARK
@@ -592,14 +589,14 @@ export default function ARKlinkoBlockchain() {
           showNotification(`Processing transaction...`)
           transactionId = await sendArkTransaction(GAME_WALLET_ADDRESS, bet, wallet)
           if (transactionId) {
-            showNotification(`☠️ Total loss! ${bet} ARK sent to game wallet`, 'error')
+            showNotification(`Total loss! ${bet} ARK sent to game wallet`, 'error')
           }
         }
       } else if (slotType === 'free') {
         // Break even - no transaction needed
         payout = bet
         isWin = true
-        showNotification(`🆓 Break even! You keep your ${bet} ARK`)
+        showNotification(`Break even! You keep your ${bet} ARK`)
       } else if (multiplier > 0) {
         // Win - game wallet sends winnings to player
         payout = bet * multiplier
@@ -609,7 +606,7 @@ export default function ARKlinkoBlockchain() {
           showNotification(`Processing winning transaction...`)
           transactionId = await sendWinningTransaction(wallet.address, payout)
           if (transactionId) {
-            showNotification(`🎉 You won ${payout.toFixed(4)} ARK! (${multiplier}x)`)
+            showNotification(`You won ${payout.toFixed(4)} ARK! (${multiplier}x)`)
           } else {
             showNotification(`Win calculated but transaction failed`, 'error')
           }
