@@ -1,5 +1,5 @@
 import { Route, Switch } from "wouter"
-import ARKlinkoBlockchain from "./pages/arklinko-blockchain"
+import ARKlinkoBlockchain from "./pages/arklinko-blockchain-fixed"
 
 function App() {
   return (
