@@ -404,7 +404,7 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
         throw new Error('ARK Connect extension not installed')
       }
 
-      console.log('ARK Connect found, checking for existing connection...')
+      console.log('ARK Connect found, attempting connection...')
 
       // Use the connect method directly
       const connectResult = await window.arkconnect.connect()
@@ -420,16 +420,23 @@ function ArkConnect({ onWalletConnected, onDisconnect, connectedWallet, onBalanc
         address = connectResult.address || 
                  connectResult.account || 
                  connectResult.walletAddress || 
-                 connectResult.data?.address || 
                  ''
+        
+        // Check nested data property
+        if (!address && connectResult.data) {
+          address = connectResult.data.address || connectResult.data.account || ''
+        }
       }
 
       // Get address using getAddress method if connect didn't return it
       if (!address) {
         try {
           const addressResult = await window.arkconnect.getAddress()
-          address = typeof addressResult === 'string' ? addressResult : 
-                   (addressResult?.address || addressResult?.data?.address || '')
+          address = typeof addressResult === 'string' ? addressResult : ''
+          
+          if (!address && addressResult && typeof addressResult === 'object') {
+            address = addressResult.address || addressResult.data?.address || ''
+          }
         } catch (getAddressError) {
           console.error('Error getting address:', getAddressError)
         }
